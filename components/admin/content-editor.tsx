@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { SiteContent, TrustItem } from "@/lib/cms/types";
-import ImageField from "@/components/admin/image-field";
+import ImagePicker from "@/components/admin/image-picker";
 
 const SECTIONS = [
   ["announcement", "Top bar"],
@@ -169,7 +169,7 @@ export default function ContentEditor({ initial }: { initial: SiteContent }) {
                     </button>
                   </div>
                 </div>
-                <ImageField
+                <ImagePicker
                   label="Photo"
                   value={slide.image}
                   onChange={(image) => {
@@ -253,7 +253,7 @@ export default function ContentEditor({ initial }: { initial: SiteContent }) {
               {content.categories.cards.map((card, index) => (
                 <div key={card.id} className="space-y-4 border border-white/10 p-4">
                   <p className="text-white font-semibold">{card.label}</p>
-                  <ImageField
+                  <ImagePicker
                     label="Photo"
                     value={card.image}
                     onChange={(image) => updateCard(index, { image })}
@@ -290,7 +290,7 @@ export default function ContentEditor({ initial }: { initial: SiteContent }) {
 
           {section === "seasonal" && (
             <>
-              <ImageField
+              <ImagePicker
                 label="Photo"
                 value={content.seasonal.image}
                 onChange={(image) => setContent({ ...content, seasonal: { ...content.seasonal, image } })}
@@ -332,7 +332,7 @@ export default function ContentEditor({ initial }: { initial: SiteContent }) {
 
           {section === "brand" && (
             <>
-              <ImageField
+              <ImagePicker
                 label="Photo"
                 value={content.brand.image}
                 onChange={(image) => setContent({ ...content, brand: { ...content.brand, image } })}

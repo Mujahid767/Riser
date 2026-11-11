@@ -114,6 +114,10 @@ export type MediaItem = {
   height: number;
   bytes: number;
   createdAt: string;
+  /** Where the file is physically stored */
+  storage?: "cloudinary" | "local";
+  /** Cloudinary public_id — only present when storage === "cloudinary" */
+  publicId?: string;
 };
 
 export type CmsStore = {

@@ -38,8 +38,8 @@ function isMediaItem(value: unknown): value is MediaItem {
   return (
     typeof item.id === "string" &&
     typeof item.url === "string" &&
-    item.url.startsWith("/uploads/") &&
-    typeof item.filename === "string"
+    typeof item.filename === "string" &&
+    (item.url.startsWith("/uploads/") || item.url.startsWith("https://"))
   );
 }
 

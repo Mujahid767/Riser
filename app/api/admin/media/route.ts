@@ -40,6 +40,6 @@ export async function DELETE(request: Request) {
   if (!id) return NextResponse.json({ error: "Missing photo id." }, { status: 400 });
 
   const removed = await removeMedia(id);
-  if (removed) await deleteUploadedFile(removed.filename);
+  if (removed) await deleteUploadedFile(removed);
   return NextResponse.json({ ok: true });
 }

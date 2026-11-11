@@ -14,6 +14,12 @@ const ICONS = {
 export default async function TrustSection() {
   const { trust } = await getSiteContent();
 
+  const features = trust.items.map((item) => ({
+    icon: ICONS[item.icon],
+    title: item.title,
+    desc: item.desc,
+  }));
+
   return (
     <section className="py-20 sm:py-28 bg-[#070709] border-b border-white/10 select-none">
       <div className="container-store">
