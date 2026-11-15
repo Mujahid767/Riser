@@ -1,53 +1,107 @@
-import { mkdir, readFile, rename, writeFile } from "fs/promises";
-import path from "path";
-import type { AdminOrder, OrderStatus } from "./types";
+/**
+ * lib/orders/store.ts
+ * Phase 2: PostgreSQL-backed order CRUD via Prisma.
+ * Public function signatures are unchanged — all callers work without modification.
+ */
+import prisma from "@/lib/db";
+import type { AdminOrder, OrderItem, OrderStatus } from "./types";
+import { Decimal } from "@prisma/client/runtime/library";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-let writeQueue: Promise<unknown> = Promise.resolve();
-
-function withLock<T>(task: () => Promise<T>): Promise<T> {
-  const run = writeQueue.then(task, task);
-  writeQueue = run.then(
-    () => undefined,
-    () => undefined
-  );
-  return run;
+function dec(d: Decimal): number {
+  return Number(d.toString());
 }
 
-async function readOrders(): Promise<AdminOrder[]> {
-  try {
-    const raw = await readFile(ORDERS_FILE, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isOrder);
-  } catch {
-    return [];
-  }
+type DbOrder = {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  address: string;
+  district: string;
+  subtotal: Decimal;
+  shippingAmount: Decimal;
+  discountAmount: Decimal;
+  totalAmount: Decimal;
+  paymentMethod: string;
+  paymentStatus: string;
+  status: string;
+  customerNotes: string | null;
+  adminNotes: string | null;
+  trackingNumber: string | null;
+  idempotencyKey: string | null;
+  flags: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+  items: {
+    id: string;
+    productId: string | null;
+    productName: string;
+    imageUrl: string | null;
+    size: string | null;
+    color: string | null;
+    quantity: number;
+    unitPrice: Decimal;
+  }[];
+};
+
+function toAdminOrder(row: DbOrder): AdminOrder {
+  const flags = Array.isArray(row.flags) ? (row.flags as string[]) : [];
+  return {
+    id: row.id,
+    orderNumber: row.orderNumber,
+    customerName: row.customerName,
+    customerPhone: row.customerPhone,
+    customerEmail: row.customerEmail ?? undefined,
+    address: row.address,
+    district: row.district,
+    items: row.items.map((i) => ({
+      productId: i.productId ?? "",
+      productName: i.productName,
+      imageUrl: i.imageUrl ?? "",
+      size: i.size ?? "",
+      color: i.color ?? "",
+      qty: i.quantity,
+      unitPrice: dec(i.unitPrice),
+    })) satisfies OrderItem[],
+    subtotal: dec(row.subtotal),
+    shippingFee: dec(row.shippingAmount),
+    discount: dec(row.discountAmount),
+    total: dec(row.totalAmount),
+    paymentMethod: row.paymentMethod as AdminOrder["paymentMethod"],
+    paymentStatus: row.paymentStatus as AdminOrder["paymentStatus"],
+    status: row.status as AdminOrder["status"],
+    note: row.adminNotes ?? undefined,
+    customerNote: row.customerNotes ?? undefined,
+    trackingNumber: row.trackingNumber ?? undefined,
+    idempotencyKey: row.idempotencyKey ?? undefined,
+    flags,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
-function isOrder(value: unknown): value is AdminOrder {
-  if (!value || typeof value !== "object") return false;
-  const o = value as AdminOrder;
-  return typeof o.id === "string" && typeof o.orderNumber === "string";
-}
-
-async function writeOrdersFile(orders: AdminOrder[]) {
-  await mkdir(DATA_DIR, { recursive: true });
-  const temp = `${ORDERS_FILE}.${process.pid}.tmp`;
-  await writeFile(temp, JSON.stringify(orders, null, 2), "utf8");
-  await rename(temp, ORDERS_FILE);
-}
-
-function nextOrderNumber(orders: AdminOrder[]): string {
+async function nextOrderNumber(): Promise<string> {
   const year = new Date().getFullYear();
-  const max = orders
-    .filter((o) => o.orderNumber.startsWith(`RIS-${year}-`))
-    .map((o) => parseInt(o.orderNumber.split("-")[2] ?? "0", 10))
-    .reduce((a, b) => Math.max(a, b), 0);
-  return `RIS-${year}-${String(max + 1).padStart(6, "0")}`;
+  const prefix = `RIS-${year}-`;
+
+  // Find the highest existing number for this year
+  const last = await prisma.order.findFirst({
+    where: { orderNumber: { startsWith: prefix } },
+    orderBy: { orderNumber: "desc" },
+    select: { orderNumber: true },
+  });
+
+  const max = last
+    ? parseInt(last.orderNumber.slice(prefix.length), 10)
+    : 0;
+
+  return `${prefix}${String(max + 1).padStart(6, "0")}`;
 }
+
+// ─── Public API ──────────────────────────────────────────────────────────────
 
 export async function listOrders(opts?: {
   status?: OrderStatus;
@@ -55,61 +109,172 @@ export async function listOrders(opts?: {
   limit?: number;
   offset?: number;
 }): Promise<{ orders: AdminOrder[]; total: number }> {
-  let orders = await readOrders();
-  orders = orders.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const where = {
+    ...(opts?.status ? { status: opts.status as never } : {}),
+    ...(opts?.search
+      ? {
+          OR: [
+            { orderNumber: { contains: opts.search, mode: "insensitive" as const } },
+            { customerName: { contains: opts.search, mode: "insensitive" as const } },
+            { customerPhone: { contains: opts.search } },
+          ],
+        }
+      : {}),
+  };
 
-  if (opts?.status) orders = orders.filter((o) => o.status === opts.status);
-  if (opts?.search) {
-    const q = opts.search.toLowerCase();
-    orders = orders.filter(
-      (o) =>
-        o.orderNumber.toLowerCase().includes(q) ||
-        o.customerName.toLowerCase().includes(q) ||
-        o.customerPhone.includes(q)
-    );
-  }
+  const [rows, total] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: opts?.offset ?? 0,
+      take: opts?.limit ?? 50,
+      include: { items: true },
+    }),
+    prisma.order.count({ where }),
+  ]);
 
-  const total = orders.length;
-  const offset = opts?.offset ?? 0;
-  const limit = opts?.limit ?? 50;
-  return { orders: orders.slice(offset, offset + limit), total };
+  return { orders: rows.map(toAdminOrder), total };
 }
 
 export async function getOrder(id: string): Promise<AdminOrder | null> {
-  const orders = await readOrders();
-  return orders.find((o) => o.id === id) ?? null;
+  const row = await prisma.order.findUnique({
+    where: { id },
+    include: { items: true },
+  });
+  return row ? toAdminOrder(row) : null;
 }
 
 export async function createOrder(
   input: Omit<AdminOrder, "id" | "orderNumber" | "createdAt" | "updatedAt">
 ): Promise<AdminOrder> {
-  return withLock(async () => {
-    const orders = await readOrders();
-    const now = new Date().toISOString();
-    const order: AdminOrder = {
-      ...input,
-      id: `ord-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      orderNumber: nextOrderNumber(orders),
-      createdAt: now,
-      updatedAt: now,
-    };
-    orders.unshift(order);
-    await writeOrdersFile(orders);
-    return order;
+  const orderNumber = await nextOrderNumber();
+
+  const row = await prisma.order.create({
+    data: {
+      orderNumber,
+      customerName: input.customerName,
+      customerPhone: input.customerPhone,
+      customerEmail: input.customerEmail ?? null,
+      address: input.address,
+      district: input.district,
+      subtotal: input.subtotal,
+      shippingAmount: input.shippingFee,
+      discountAmount: input.discount ?? 0,
+      totalAmount: input.total,
+      paymentMethod: input.paymentMethod as never,
+      paymentStatus: input.paymentStatus as never,
+      status: input.status as never,
+      customerNotes: input.customerNote ?? null,
+      adminNotes: input.note ?? null,
+      trackingNumber: input.trackingNumber ?? null,
+      idempotencyKey: input.idempotencyKey ?? null,
+      flags: (input.flags ?? []) as never,
+      items: {
+        create: input.items.map((i) => ({
+          productId: i.productId || null,
+          productName: i.productName,
+          imageUrl: i.imageUrl || null,
+          size: i.size || null,
+          color: i.color || null,
+          quantity: i.qty,
+          unitPrice: i.unitPrice,
+          subtotal: i.unitPrice * i.qty,
+        })),
+      },
+    },
+    include: { items: true },
   });
+  return toAdminOrder(row);
 }
 
 export async function updateOrder(
   id: string,
   input: Partial<Pick<AdminOrder, "status" | "paymentStatus" | "trackingNumber" | "note">>
 ): Promise<AdminOrder | null> {
-  return withLock(async () => {
-    const orders = await readOrders();
-    const index = orders.findIndex((o) => o.id === id);
-    if (index === -1) return null;
-    orders[index] = { ...orders[index], ...input, updatedAt: new Date().toISOString() };
-    await writeOrdersFile(orders);
-    return orders[index];
+  const existing = await prisma.order.findUnique({ where: { id } });
+  if (!existing) return null;
+
+  const row = await prisma.order.update({
+    where: { id },
+    data: {
+      ...(input.status !== undefined ? { status: input.status as never } : {}),
+      ...(input.paymentStatus !== undefined
+        ? { paymentStatus: input.paymentStatus as never }
+        : {}),
+      ...(input.trackingNumber !== undefined
+        ? { trackingNumber: input.trackingNumber ?? null }
+        : {}),
+      ...(input.note !== undefined ? { adminNotes: input.note ?? null } : {}),
+    },
+    include: { items: true },
   });
+  return toAdminOrder(row);
 }
 
+/**
+ * Create an order exactly once per idempotency key.
+ * If the key was already used, the original order is returned (created = false).
+ * Flags repeat orders from the same phone in the last 24h for staff review.
+ */
+export async function createOrderIdempotent(
+  input: Omit<AdminOrder, "id" | "orderNumber" | "createdAt" | "updatedAt" | "flags">,
+  idempotencyKey: string
+): Promise<{ order: AdminOrder; created: boolean }> {
+  // Check idempotency key first (outside transaction for speed)
+  const existing = await prisma.order.findUnique({
+    where: { idempotencyKey },
+    include: { items: true },
+  });
+  if (existing) return { order: toAdminOrder(existing), created: false };
+
+  // Check for repeat phone in last 24h
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const repeat = await prisma.order.findFirst({
+    where: {
+      customerPhone: input.customerPhone,
+      status: { not: "CANCELLED" as never },
+      createdAt: { gt: dayAgo },
+    },
+    select: { id: true },
+  });
+
+  const flags = repeat ? ["repeat_phone_24h"] : [];
+  const orderNumber = await nextOrderNumber();
+
+  const row = await prisma.order.create({
+    data: {
+      orderNumber,
+      customerName: input.customerName,
+      customerPhone: input.customerPhone,
+      customerEmail: input.customerEmail ?? null,
+      address: input.address,
+      district: input.district,
+      subtotal: input.subtotal,
+      shippingAmount: input.shippingFee,
+      discountAmount: input.discount ?? 0,
+      totalAmount: input.total,
+      paymentMethod: input.paymentMethod as never,
+      paymentStatus: input.paymentStatus as never,
+      status: input.status as never,
+      customerNotes: input.customerNote ?? null,
+      adminNotes: input.note ?? null,
+      trackingNumber: input.trackingNumber ?? null,
+      idempotencyKey,
+      flags: flags as never,
+      items: {
+        create: input.items.map((i) => ({
+          productId: i.productId || null,
+          productName: i.productName,
+          imageUrl: i.imageUrl || null,
+          size: i.size || null,
+          color: i.color || null,
+          quantity: i.qty,
+          unitPrice: i.unitPrice,
+          subtotal: i.unitPrice * i.qty,
+        })),
+      },
+    },
+    include: { items: true },
+  });
+  return { order: toAdminOrder(row), created: true };
+}

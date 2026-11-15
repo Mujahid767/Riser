@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import { listOrders, getOrder, updateOrder } from "@/lib/orders/store";
+import { releaseStock } from "@/lib/products/store";
 import type { OrderStatus } from "@/lib/orders/types";
 
 export const runtime = "nodejs";
@@ -47,8 +48,24 @@ export async function PUT(request: Request) {
 
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
 
+  const before = await getOrder(id);
+  if (!before) return NextResponse.json({ error: "Order not found." }, { status: 404 });
+
+  // Stock was returned when the order was cancelled, so it cannot simply be re-opened.
+  if (before.status === "CANCELLED" && body.status && body.status !== "CANCELLED") {
+    return NextResponse.json(
+      { error: "A cancelled order can't be re-opened. Ask the customer to place a new order." },
+      { status: 400 }
+    );
+  }
+
   const order = await updateOrder(id, body);
   if (!order) return NextResponse.json({ error: "Order not found." }, { status: 404 });
+
+  // First transition into CANCELLED → put the units back on the shelf.
+  if (before.status !== "CANCELLED" && order.status === "CANCELLED") {
+    await releaseStock(order.items.map((i) => ({ productId: i.productId, qty: i.qty })));
+  }
 
   return NextResponse.json({ order });
 }

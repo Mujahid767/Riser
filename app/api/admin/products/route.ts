@@ -37,6 +37,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Name, category and price are required." }, { status: 400 });
   }
 
+  const statusVal = (body.status ?? "active").toUpperCase();
+  if (statusVal === "ACTIVE" && !body.imageUrl) {
+    return NextResponse.json(
+      { error: "Add a main photo before publishing, or save it as Draft." },
+      { status: 400 }
+    );
+  }
+
   const slug = body.slug?.trim() ||
     body.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -45,7 +53,7 @@ export async function POST(request: Request) {
     slug,
     category: body.category,
     department: body.department ?? (body.category.startsWith("adult") || body.category === "short-tops" ? "women" : "petite"),
-    status: body.status ?? "active",
+    status: (body.status ?? "active").toUpperCase() as AdminProduct["status"],
     price: Number(body.price),
     compareAtPrice: body.compareAtPrice ? Number(body.compareAtPrice) : undefined,
     imageUrl: body.imageUrl ?? "",
@@ -78,6 +86,16 @@ export async function PUT(request: Request) {
 
   const body = (await request.json().catch(() => null)) as Partial<AdminProduct> | null;
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
+
+  const current = await getProduct(id);
+  if (!current) return NextResponse.json({ error: "Product not found." }, { status: 404 });
+  const merged = { ...current, ...body };
+  if ((merged.status ?? "ACTIVE").toUpperCase() === "ACTIVE" && !merged.imageUrl) {
+    return NextResponse.json(
+      { error: "Add a main photo before publishing, or save it as Draft." },
+      { status: 400 }
+    );
+  }
 
   const product = await updateProduct(id, body);
   if (!product) return NextResponse.json({ error: "Product not found." }, { status: 404 });

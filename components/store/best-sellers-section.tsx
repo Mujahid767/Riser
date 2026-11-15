@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import ProductCard from "@/components/product/product-card";
-import { getSeedProducts } from "@/lib/utils/seed-products";
+import { getCatalogProducts } from "@/lib/catalog";
 import { getSiteContent } from "@/lib/cms/store";
 
 export default async function BestSellersSection() {
   const { bestSellers } = await getSiteContent();
-  const products = getSeedProducts().filter((p) => p.isBestSeller).slice(0, 4);
+  const products = (await getCatalogProducts()).filter((p) => p.isBestSeller).slice(0, 4);
 
   return (
     <section className="py-20 sm:py-32 bg-[#070709] border-b border-white/10 select-none">

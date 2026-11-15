@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import ShopClient from "@/components/store/shop-client";
-import { getSeedProducts } from "@/lib/utils/seed-products";
+import { getCatalogProducts } from "@/lib/catalog";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "The Archive // Haute Couture Collection — Riser",
@@ -23,7 +25,7 @@ interface ShopPageProps {
 
 export default async function ShopPage({ searchParams }: ShopPageProps) {
   const params = await searchParams;
-  const allProducts = getSeedProducts();
+  const allProducts = await getCatalogProducts();
 
   return (
     <div className="bg-[#070709] min-h-screen text-white select-none">

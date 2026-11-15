@@ -22,6 +22,8 @@ interface ProductCardProps {
   fabric?: string;
   colors?: Array<{ name: string; value: string }>;
   sizes?: string[];
+  /** Units left. 0 = sold out. undefined = not tracked. */
+  stock?: number;
   className?: string;
 }
 
@@ -41,6 +43,7 @@ export default function ProductCard({
   fabric,
   colors = [],
   sizes = [],
+  stock,
   className,
 }: ProductCardProps) {
   const [isWishlisted, setIsWishlisted] = useState(false);
@@ -119,6 +122,12 @@ export default function ProductCard({
                   SIGNATURE PIECE
                 </span>
               ) : null}
+
+              {stock === 0 && (
+                <span className="px-1.5 py-0.5 text-[8px] font-mono tracking-widest uppercase font-bold bg-white text-black">
+                  SOLD OUT
+                </span>
+              )}
 
               {discount && (
                 <span className="px-1.5 py-0.5 text-[8px] font-mono tracking-widest uppercase font-bold bg-brand-500/90 text-white">

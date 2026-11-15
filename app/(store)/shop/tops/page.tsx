@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import ShopClient from "@/components/store/shop-client";
-import { getSeedProductsByCategory } from "@/lib/utils/seed-products";
+import { getCatalogByCategory } from "@/lib/catalog";
 
 export const metadata: Metadata = {
   title: "tops — Riser",
 };
 
-export default function CategoryPage() {
-  const products = getSeedProductsByCategory("tops");
+export const dynamic = "force-dynamic";
+
+export default async function CategoryPage() {
+  const products = await getCatalogByCategory("tops");
   return (
     <div className="bg-[#070709] min-h-screen text-white select-none">
       <div className="bg-[#050507] border-b border-white/10">

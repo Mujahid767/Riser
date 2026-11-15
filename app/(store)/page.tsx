@@ -7,6 +7,7 @@ import BrandStorySection from "@/components/store/brand-story-section";
 import SeasonalBanner from "@/components/store/seasonal-banner";
 import TrustSection from "@/components/store/trust-section";
 import { getSiteContent } from "@/lib/cms/store";
+import { getCatalogProducts } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -17,13 +18,13 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const content = await getSiteContent();
+  const [content, products] = await Promise.all([getSiteContent(), getCatalogProducts()]);
 
   return (
     <>
       <HeroSection slides={content.hero} />
       <CategoryGrid />
-      <NewArrivalsSection copy={content.newArrivals} />
+      <NewArrivalsSection copy={content.newArrivals} products={products} />
       <SeasonalBanner />
       <BestSellersSection />
       <BrandStorySection />

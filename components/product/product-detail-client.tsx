@@ -3,32 +3,32 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   Heart,
   ShoppingBag,
   Truck,
-  RotateCcw,
   Minus,
   Plus,
   Shield,
   ArrowRight,
   Sparkles,
   Scissors,
+  Check,
 } from "lucide-react";
 import { cn, formatPrice, calculateDiscount } from "@/lib/utils";
-import { getSeedProductBySlug, getSeedProducts } from "@/lib/utils/seed-products";
+import { addToCart } from "@/lib/cart/cart-store";
+import { MAX_QTY_PER_LINE, SHIPPING_RATES } from "@/lib/shipping";
+import type { StoreProduct } from "@/lib/catalog";
 import ProductCard from "@/components/product/product-card";
 
 interface ProductDetailClientProps {
-  slug: string;
+  product: StoreProduct;
+  related: StoreProduct[];
 }
 
-export default function ProductDetailClient({ slug }: ProductDetailClientProps) {
-  const product = getSeedProductBySlug(slug);
-
-  if (!product) notFound();
-
+export default function ProductDetailClient({ product, related }: ProductDetailClientProps) {
+  const router = useRouter();
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(
     product.colors?.[0]?.name ?? null
@@ -37,20 +37,40 @@ export default function ProductDetailClient({ slug }: ProductDetailClientProps) 
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [activeImage, setActiveImage] = useState(product.imageUrl);
   const [imageError, setImageError] = useState(false);
+  const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
 
   const discount = calculateDiscount(product.price, product.compareAtPrice);
-  const related = getSeedProducts()
-    .filter((p) => p.category === product.category && p.slug !== product.slug)
-    .slice(0, 4);
+  const soldOut = product.stock === 0;
+  const maxQty = Math.min(MAX_QTY_PER_LINE, product.stock ?? MAX_QTY_PER_LINE);
+  const lowStock = product.stock !== undefined && product.stock > 0 && product.stock <= 5;
 
-  const images = [product.imageUrl, product.secondaryImageUrl].filter(Boolean) as string[];
+  const images = [product.imageUrl, product.secondaryImageUrl, ...(product.gallery ?? [])].filter(
+    (img, i, arr): img is string => Boolean(img) && arr.indexOf(img) === i
+  );
 
-  const handleAddToCart = () => {
-    if (!selectedSize) {
-      alert("Please select a size before proceeding to the bag.");
-      return;
+  /** Returns true when the item was added. */
+  const handleAddToCart = (): boolean => {
+    if (soldOut) return false;
+    if (product.sizes?.length && !selectedSize) {
+      setMessage({ type: "error", text: "Please select a size first." });
+      return false;
     }
-    alert(`Added to Bag: ${product.name} [Size: ${selectedSize}]`);
+    addToCart({
+      productId: product.id,
+      slug: product.slug,
+      name: product.name,
+      imageUrl: product.imageUrl,
+      price: product.price,
+      size: selectedSize ?? "",
+      color: selectedColor ?? "",
+      qty: quantity,
+    });
+    setMessage({ type: "ok", text: "Added to your bag." });
+    return true;
+  };
+
+  const handleBuyNow = () => {
+    if (handleAddToCart()) router.push("/checkout");
   };
 
   return (
@@ -254,7 +274,10 @@ export default function ProductDetailClient({ slug }: ProductDetailClientProps) 
                       <button
                         key={size}
                         type="button"
-                        onClick={() => setSelectedSize(size)}
+                        onClick={() => {
+                          setSelectedSize(size);
+                          setMessage(null);
+                        }}
                         className={cn(
                           "py-2.5 text-xs font-mono tracking-wider uppercase border transition-all text-center",
                           selectedSize === size
@@ -287,7 +310,7 @@ export default function ProductDetailClient({ slug }: ProductDetailClientProps) 
                     </span>
                     <button
                       type="button"
-                      onClick={() => setQuantity(quantity + 1)}
+                      onClick={() => setQuantity(Math.min(maxQty, quantity + 1))}
                       className="px-3 text-neutral-400 hover:text-white transition-colors"
                       aria-label="Increase quantity"
                     >
@@ -298,11 +321,12 @@ export default function ProductDetailClient({ slug }: ProductDetailClientProps) 
                   {/* Add to Bag */}
                   <button
                     type="button"
-                    onClick={handleAddToCart}
-                    className="flex-1 btn-luxury-white h-12 text-xs"
+                    onClick={() => void handleAddToCart()}
+                    disabled={soldOut}
+                    className="flex-1 btn-luxury-white h-12 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <ShoppingBag className="w-4 h-4" />
-                    <span>ADD TO BAG</span>
+                    <span>{soldOut ? "SOLD OUT" : "ADD TO BAG"}</span>
                   </button>
 
                   {/* Wishlist */}
@@ -321,20 +345,48 @@ export default function ProductDetailClient({ slug }: ProductDetailClientProps) 
                   </button>
                 </div>
 
-                {/* Instant Buy with Crimson */}
-                <Link
-                  href="/checkout"
-                  className="w-full btn-luxury-crimson py-3.5 text-center block text-xs"
-                >
-                  ACQUIRE PIECE &bull; PROCEED TO DISPATCH
-                </Link>
+                {lowStock && (
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-amber-400">
+                    Only {product.stock} left
+                  </p>
+                )}
+
+                {message && (
+                  <p
+                    role="status"
+                    className={cn(
+                      "text-[11px] font-mono uppercase tracking-widest flex items-center gap-2",
+                      message.type === "error" ? "text-red-400" : "text-emerald-400"
+                    )}
+                  >
+                    {message.type === "ok" && <Check className="w-3.5 h-3.5" />}
+                    {message.text}
+                    {message.type === "ok" && (
+                      <Link href="/cart" className="underline underline-offset-4 text-white ml-1">
+                        View bag
+                      </Link>
+                    )}
+                  </p>
+                )}
+
+                {!soldOut && (
+                  <button
+                    type="button"
+                    onClick={handleBuyNow}
+                    className="w-full btn-luxury-crimson py-3.5 text-center block text-xs"
+                  >
+                    BUY NOW &bull; CASH ON DELIVERY
+                  </button>
+                )}
               </div>
 
               {/* Atelier Pillars */}
               <div className="pt-6 border-t border-white/10 space-y-3 text-[11px] font-mono text-neutral-400 uppercase">
                 <div className="flex items-center gap-3">
                   <Truck className="w-4 h-4 text-brand-400 shrink-0" />
-                  <span>Complimentary Insured Express Dispatch Inside Dhaka</span>
+                  <span>
+                    Delivery ৳{SHIPPING_RATES.dhaka} inside Dhaka &bull; ৳{SHIPPING_RATES.outsideDhaka} outside Dhaka &bull; Cash on delivery
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Scissors className="w-4 h-4 text-brand-400 shrink-0" />

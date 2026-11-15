@@ -9,6 +9,10 @@ export interface SeedProduct {
   compareAtPrice?: number;
   imageUrl: string;
   secondaryImageUrl?: string;
+  /** Extra gallery photos (admin products) */
+  gallery?: string[];
+  /** Units available. `undefined` = not tracked (demo products). */
+  stock?: number;
   isNew?: boolean;
   isBestSeller?: boolean;
   isLimited?: boolean;

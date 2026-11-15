@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import ProductCard from "@/components/product/product-card";
-import { getSeedProducts } from "@/lib/utils/seed-products";
+import type { StoreProduct } from "@/lib/catalog";
 import { cn } from "@/lib/utils";
 import type { SiteContent } from "@/lib/cms/types";
 
@@ -20,11 +20,12 @@ const TABS = [
 
 export default function NewArrivalsSection({
   copy,
+  products: allProducts,
 }: {
   copy: SiteContent["newArrivals"];
+  products: StoreProduct[];
 }) {
   const [activeTab, setActiveTab] = useState("all");
-  const allProducts = getSeedProducts();
 
   const filteredProducts =
     activeTab === "all"

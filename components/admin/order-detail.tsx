@@ -60,6 +60,17 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
         </span>
       </div>
 
+      {order.flags?.includes("repeat_phone_24h") && (
+        <p className="text-amber-400 text-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          ⚠ This phone number placed another order in the last 24 hours. Check before confirming — it may be a repeat customer or a duplicate.
+        </p>
+      )}
+      {order.customerNote && (
+        <div className="border border-white/10 bg-admin-card px-4 py-3">
+          <p className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">Customer note</p>
+          <p className="text-sm text-white whitespace-pre-wrap">{order.customerNote}</p>
+        </div>
+      )}
       {error && <p className="text-red-400 text-sm">{error}</p>}
       {saved && <p className="text-emerald-400 text-sm">Order updated successfully.</p>}
 

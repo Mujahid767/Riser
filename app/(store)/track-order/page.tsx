@@ -1,45 +1,102 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Package, CheckCircle, Truck, MapPin, XCircle } from "lucide-react";
-import type { Metadata } from "next";
+import {
+  Search,
+  Package,
+  CheckCircle,
+  Truck,
+  XCircle,
+  Clock,
+} from "lucide-react";
 
 const STATUS_STEPS = [
-  { key: "PENDING", label: "Order Placed", icon: Package, desc: "Your order has been received" },
-  { key: "CONFIRMED", label: "Confirmed", icon: CheckCircle, desc: "Order confirmed by our team" },
-  { key: "PROCESSING", label: "Processing", icon: Package, desc: "Being prepared for dispatch" },
-  { key: "PACKED", label: "Packed", icon: Package, desc: "Securely packed and ready" },
-  { key: "SHIPPED", label: "Shipped", icon: Truck, desc: "Out for delivery" },
-  { key: "DELIVERED", label: "Delivered", icon: CheckCircle, desc: "Successfully delivered" },
+  {
+    key: "PENDING",
+    label: "Order Placed",
+    icon: Clock,
+    desc: "Your order has been received",
+  },
+  {
+    key: "CONFIRMED",
+    label: "Confirmed",
+    icon: CheckCircle,
+    desc: "Order confirmed by our team",
+  },
+  {
+    key: "PROCESSING",
+    label: "Processing",
+    icon: Package,
+    desc: "Being prepared for dispatch",
+  },
+  {
+    key: "PACKED",
+    label: "Packed",
+    icon: Package,
+    desc: "Securely packed and ready",
+  },
+  {
+    key: "SHIPPED",
+    label: "Shipped",
+    icon: Truck,
+    desc: "Out for delivery",
+  },
+  {
+    key: "DELIVERED",
+    label: "Delivered",
+    icon: CheckCircle,
+    desc: "Successfully delivered",
+  },
 ];
 
-// Demo order for display
-const DEMO_ORDER = {
-  orderNumber: "RIS-2026-000123",
-  status: "SHIPPED",
-  customerName: "Demo Customer",
-  createdAt: "28 Sep, 2026",
-  items: [
-    { name: "Floral Cotton Dress", size: "4-5Y", qty: 1 },
-    { name: "Classic Party Frock", size: "5-6Y", qty: 2 },
-  ],
-  total: 2300,
+type TrackResult = {
+  orderNumber: string;
+  status: string;
+  customerName: string;
+  createdAt: string;
+  district: string;
+  trackingNumber?: string;
+  total: number;
+  shippingFee: number;
+  items: { productName: string; size?: string; color?: string; qty: number; unitPrice: number }[];
 };
 
 export default function TrackOrderPage() {
   const [orderNumber, setOrderNumber] = useState("");
   const [phone, setPhone] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<TrackResult | null>(null);
   const [searched, setSearched] = useState(false);
-  const [found, setFound] = useState(false);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSearched(true);
-    // Demo: show result for any valid-format input
-    setFound(orderNumber.toUpperCase().includes("RIS") || orderNumber.length > 4);
+    setLoading(true);
+    setError("");
+    setResult(null);
+    setSearched(false);
+
+    try {
+      const res = await fetch(
+        `/api/orders/track?orderNumber=${encodeURIComponent(orderNumber.trim())}&phone=${encodeURIComponent(phone.trim())}`
+      );
+      setSearched(true);
+      if (res.ok) {
+        const data = (await res.json()) as TrackResult;
+        setResult(data);
+      } else {
+        setResult(null);
+      }
+    } catch {
+      setError("Could not connect. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const currentStep = STATUS_STEPS.findIndex((s) => s.key === DEMO_ORDER.status);
+  const currentStep = result
+    ? STATUS_STEPS.findIndex((s) => s.key === result.status)
+    : -1;
 
   return (
     <div className="bg-neutral-50 min-h-screen py-12 px-4">
@@ -53,16 +110,22 @@ export default function TrackOrderPage() {
         </div>
 
         {/* Search Form */}
-        <form onSubmit={handleSearch} className="bg-white rounded-2xl border border-neutral-100 p-6 mb-6">
+        <form
+          onSubmit={handleSearch}
+          className="bg-white rounded-2xl border border-neutral-100 p-6 mb-6"
+        >
           <div className="space-y-4">
             <div>
-              <label htmlFor="track-order-number" className="block text-sm font-medium text-neutral-700 mb-1.5">
+              <label
+                htmlFor="track-order-number"
+                className="block text-sm font-medium text-neutral-700 mb-1.5"
+              >
                 Order Number
               </label>
               <input
                 id="track-order-number"
                 type="text"
-                placeholder="RIS-2026-000123"
+                placeholder="RIS-2026-000001"
                 value={orderNumber}
                 onChange={(e) => setOrderNumber(e.target.value)}
                 required
@@ -70,7 +133,10 @@ export default function TrackOrderPage() {
               />
             </div>
             <div>
-              <label htmlFor="track-phone" className="block text-sm font-medium text-neutral-700 mb-1.5">
+              <label
+                htmlFor="track-phone"
+                className="block text-sm font-medium text-neutral-700 mb-1.5"
+              >
                 Phone Number
               </label>
               <input
@@ -83,21 +149,32 @@ export default function TrackOrderPage() {
                 className="input-field"
               />
             </div>
-            <button type="submit" id="track-order-btn" className="btn-primary w-full py-3">
+            {error && (
+              <p className="text-sm text-red-600">{error}</p>
+            )}
+            <button
+              type="submit"
+              id="track-order-btn"
+              disabled={loading}
+              className="btn-primary w-full py-3 disabled:opacity-60"
+            >
               <Search className="w-4 h-4" />
-              Track Order
+              {loading ? "Searching…" : "Track Order"}
             </button>
           </div>
         </form>
 
-        {/* Results */}
-        {searched && !found && (
+        {/* Not found */}
+        {searched && !result && !loading && (
           <div className="bg-white rounded-2xl border border-neutral-100 p-8 text-center">
             <XCircle className="w-12 h-12 text-neutral-300 mx-auto mb-4" />
-            <h3 className="font-semibold text-neutral-900 mb-2">Order Not Found</h3>
+            <h3 className="font-semibold text-neutral-900 mb-2">
+              Order Not Found
+            </h3>
             <p className="text-neutral-500 text-sm">
-              We couldn't find an order matching those details. Please check and try again, or{" "}
-              <a href="tel:+8801XXXXXXXXX" className="text-brand-600 hover:underline">
+              We couldn&apos;t find an order matching those details. Please
+              check and try again, or{" "}
+              <a href="tel:+8801700000000" className="text-brand-600 hover:underline">
                 contact us
               </a>
               .
@@ -105,40 +182,74 @@ export default function TrackOrderPage() {
           </div>
         )}
 
-        {searched && found && (
+        {/* Result */}
+        {result && (
           <div className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
             {/* Order header */}
             <div className="bg-brand-500 text-white p-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <p className="text-brand-200 text-xs uppercase tracking-wide mb-1">Order Number</p>
-                  <p className="font-bold text-lg font-mono">{DEMO_ORDER.orderNumber}</p>
+                  <p className="text-brand-200 text-xs uppercase tracking-wide mb-1">
+                    Order Number
+                  </p>
+                  <p className="font-bold text-lg font-mono">
+                    {result.orderNumber}
+                  </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-brand-200 text-xs uppercase tracking-wide mb-1">Placed on</p>
-                  <p className="font-semibold">{DEMO_ORDER.createdAt}</p>
+                  <p className="text-brand-200 text-xs uppercase tracking-wide mb-1">
+                    Placed on
+                  </p>
+                  <p className="font-semibold">
+                    {new Date(result.createdAt).toLocaleDateString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </p>
                 </div>
               </div>
+              {result.trackingNumber && (
+                <div className="mt-3 pt-3 border-t border-brand-400">
+                  <p className="text-brand-200 text-xs uppercase tracking-wide mb-1">
+                    Tracking Number
+                  </p>
+                  <p className="font-mono font-semibold">
+                    {result.trackingNumber}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Progress Tracker */}
             <div className="p-6">
-              <h3 className="font-semibold text-neutral-900 mb-6">Delivery Status</h3>
+              <h3 className="font-semibold text-neutral-900 mb-6">
+                Delivery Status
+              </h3>
               <div className="relative">
-                {/* Progress line */}
+                {/* Background line */}
                 <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-neutral-100" />
-                <div
-                  className="absolute left-4 top-4 w-0.5 bg-brand-500 transition-all duration-700"
-                  style={{ height: `${(currentStep / (STATUS_STEPS.length - 1)) * 100}%` }}
-                />
+                {/* Filled line */}
+                {currentStep >= 0 && (
+                  <div
+                    className="absolute left-4 top-4 w-0.5 bg-brand-500 transition-all duration-700"
+                    style={{
+                      height: `${
+                        (currentStep / (STATUS_STEPS.length - 1)) * 100
+                      }%`,
+                    }}
+                  />
+                )}
 
                 <div className="space-y-6 relative">
                   {STATUS_STEPS.map((step, idx) => {
                     const isCompleted = idx <= currentStep;
                     const isCurrent = idx === currentStep;
                     return (
-                      <div key={step.key} className="flex items-start gap-4 pl-10">
-                        {/* Circle */}
+                      <div
+                        key={step.key}
+                        className="flex items-start gap-4 pl-10"
+                      >
                         <div
                           className={`absolute left-0 w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all z-10 ${
                             isCompleted
@@ -147,11 +258,19 @@ export default function TrackOrderPage() {
                           } ${isCurrent ? "ring-4 ring-brand-100" : ""}`}
                         >
                           <step.icon
-                            className={`w-4 h-4 ${isCompleted ? "text-white" : "text-neutral-300"}`}
+                            className={`w-4 h-4 ${
+                              isCompleted ? "text-white" : "text-neutral-300"
+                            }`}
                           />
                         </div>
                         <div className={isCompleted ? "" : "opacity-40"}>
-                          <p className={`font-semibold text-sm ${isCurrent ? "text-brand-700" : "text-neutral-900"}`}>
+                          <p
+                            className={`font-semibold text-sm ${
+                              isCurrent
+                                ? "text-brand-700"
+                                : "text-neutral-900"
+                            }`}
+                          >
                             {step.label}
                             {isCurrent && (
                               <span className="ml-2 text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-bold">
@@ -159,7 +278,9 @@ export default function TrackOrderPage() {
                               </span>
                             )}
                           </p>
-                          <p className="text-xs text-neutral-500 mt-0.5">{step.desc}</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            {step.desc}
+                          </p>
                         </div>
                       </div>
                     );
@@ -169,17 +290,38 @@ export default function TrackOrderPage() {
 
               {/* Items */}
               <div className="mt-8 pt-6 border-t border-neutral-100">
-                <h4 className="font-semibold text-neutral-900 text-sm mb-3">Items in this order</h4>
-                {DEMO_ORDER.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between py-2 text-sm">
-                    <span className="text-neutral-700">
-                      {item.name} <span className="text-neutral-400">× {item.qty}</span>
-                    </span>
-                    <span className="text-xs bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded-full">
-                      Size: {item.size}
+                <h4 className="font-semibold text-neutral-900 text-sm mb-3">
+                  Items in this order
+                </h4>
+                {result.items.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between py-2 text-sm border-b border-neutral-50 last:border-0"
+                  >
+                    <div>
+                      <span className="text-neutral-700">{item.productName}</span>
+                      <span className="text-neutral-400 ml-1">× {item.qty}</span>
+                      {(item.size || item.color) && (
+                        <span className="ml-2 text-xs text-neutral-400">
+                          {[item.size, item.color].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-medium text-neutral-800">
+                      ৳{(item.unitPrice * item.qty).toLocaleString()}
                     </span>
                   </div>
                 ))}
+                <div className="mt-3 pt-3 border-t border-neutral-100 space-y-1">
+                  <div className="flex justify-between text-sm text-neutral-500">
+                    <span>Shipping ({result.district})</span>
+                    <span>৳{result.shippingFee.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-semibold text-neutral-900">
+                    <span>Total</span>
+                    <span>৳{result.total.toLocaleString()}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

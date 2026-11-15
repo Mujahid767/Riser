@@ -36,8 +36,15 @@ export type AdminOrder = {
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   status: OrderStatus;
+  /** Internal note, written by staff */
   note?: string;
+  /** Instructions the customer typed at checkout */
+  customerNote?: string;
   trackingNumber?: string;
+  /** Client-generated key — a retried/double-clicked submit returns the same order */
+  idempotencyKey?: string;
+  /** Automatic review flags, e.g. "repeat_phone_24h" */
+  flags?: string[];
   createdAt: string;
   updatedAt: string;
 };
