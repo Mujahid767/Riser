@@ -8,6 +8,7 @@ import { CheckCircle2, ShoppingBag } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
 import { clearCart, syncCartFromServer, useCart } from "@/lib/cart/cart-store";
 import { calculateShipping, DISTRICTS } from "@/lib/shipping";
+import { analytics } from "@/lib/analytics";
 
 const PAYMENT_METHODS = [
   { id: "COD", label: "Cash on Delivery", desc: "Pay in cash when your order arrives", available: true },
@@ -83,6 +84,18 @@ export default function CheckoutClient() {
 
   useEffect(() => setHydrated(true), []);
 
+  // Fire InitiateCheckout once when the page loads and cart is non-empty
+  useEffect(() => {
+    if (hydrated && lines.length > 0) {
+      analytics.initiateCheckout({
+        totalValue: total,
+        itemCount: lines.reduce((s, l) => s + l.qty, 0),
+      });
+    }
+    // only on first hydration
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
   const shipping = useMemo(
     () => (fields.district ? calculateShipping(fields.district, subtotal) : null),
     [fields.district, subtotal]
@@ -154,6 +167,12 @@ export default function CheckoutClient() {
       };
 
       if (res.ok && data.orderNumber) {
+        // Fire CODOrderPlaced analytics event
+        analytics.codOrderPlaced({
+          orderNumber: data.orderNumber,
+          total: data.total ?? total,
+          itemCount: lines.reduce((s, l) => s + l.qty, 0),
+        });
         try {
           window.sessionStorage.setItem(
             LAST_ORDER_STORAGE,

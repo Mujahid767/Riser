@@ -1,3 +1,7 @@
+/**
+ * lib/auth/session.ts
+ * Phase 3: bcrypt password verification, login rate limiting, HMAC-signed session cookie.
+ */
 import { cookies } from "next/headers";
 
 export const ADMIN_COOKIE = "riser_admin";
@@ -17,15 +21,19 @@ function authSecret(): string {
   return "riser-dev-auth-secret-change-me";
 }
 
-export function adminCredentials(): { email: string; password: string } | null {
+export function adminCredentials(): { email: string; passwordHash?: string; password?: string } | null {
   const email = (process.env.ADMIN_EMAIL || "admin@riser.com.bd").trim().toLowerCase();
-  const password = process.env.ADMIN_PASSWORD;
-  if (!password) {
+  const hash = process.env.ADMIN_PASSWORD_HASH; // bcrypt hash (preferred)
+  const plain = process.env.ADMIN_PASSWORD;      // plain fallback
+
+  if (!hash && !plain) {
     if (process.env.NODE_ENV === "production") return null;
-    return { email, password: "RiserAdmin2026" };
+    return { email, password: "RiserAdmin2026" }; // dev-only fallback
   }
-  return { email, password };
+  return { email, passwordHash: hash || undefined, password: plain || undefined };
 }
+
+// ─── HMAC session token ──────────────────────────────────────────────────────
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -68,14 +76,18 @@ export async function createSessionToken(email: string): Promise<string> {
   return `${payload}.${await sign(payload)}`;
 }
 
-export async function verifySessionToken(token: string | undefined | null): Promise<AdminSession | null> {
+export async function verifySessionToken(
+  token: string | undefined | null
+): Promise<AdminSession | null> {
   if (!token) return null;
   const [payload, signature] = token.split(".");
   if (!payload || !signature) return null;
   const expected = await sign(payload);
   if (!safeEqual(signature, expected)) return null;
   try {
-    const data = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) as AdminSession;
+    const data = JSON.parse(
+      new TextDecoder().decode(base64UrlToBytes(payload))
+    ) as AdminSession;
     if (!data.email || typeof data.exp !== "number" || data.exp < Date.now()) return null;
     return data;
   } catch {
@@ -88,6 +100,21 @@ export async function getAdminSession(): Promise<AdminSession | null> {
   return verifySessionToken(jar.get(ADMIN_COOKIE)?.value);
 }
 
-export function passwordsMatch(input: string, expected: string): boolean {
-  return safeEqual(input, expected);
+/**
+ * Verify a password against the stored credential.
+ * Supports bcrypt hashes (ADMIN_PASSWORD_HASH) and plain text (ADMIN_PASSWORD).
+ * bcrypt runs only on Node.js runtime — never call from edge.
+ */
+export async function verifyAdminPassword(input: string): Promise<boolean> {
+  const creds = adminCredentials();
+  if (!creds) return false;
+
+  if (creds.passwordHash) {
+    // bcrypt comparison — dynamically imported so edge builds don't break
+    const { compare } = await import("bcryptjs");
+    return compare(input, creds.passwordHash);
+  }
+
+  // Plain text fallback (dev or simple production use)
+  return safeEqual(input, creds.password ?? "");
 }

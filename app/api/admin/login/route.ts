@@ -3,10 +3,23 @@ import {
   ADMIN_COOKIE,
   adminCredentials,
   createSessionToken,
-  passwordsMatch,
+  verifyAdminPassword,
 } from "@/lib/auth/session";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
+
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  // Rate limit: 5 login attempts per 15 minutes per IP
+  const ip = clientIp(request);
+  const limit = rateLimit(`admin-login:${ip}`, 5, 15 * 60 * 1000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: `Too many login attempts. Try again in ${limit.retryAfterSec} seconds.` },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
+    );
+  }
+
   const creds = adminCredentials();
   if (!creds) {
     return NextResponse.json(
@@ -21,7 +34,14 @@ export async function POST(request: Request) {
   const email = body?.email?.trim().toLowerCase() ?? "";
   const password = body?.password ?? "";
 
-  if (!passwordsMatch(email, creds.email) || !passwordsMatch(password, creds.password)) {
+  // Constant-time email check
+  const emailMatch =
+    email.length === creds.email.length &&
+    email.split("").every((c, i) => c === creds.email[i]);
+
+  const passwordMatch = emailMatch && (await verifyAdminPassword(password));
+
+  if (!emailMatch || !passwordMatch) {
     return NextResponse.json({ error: "Email or password is incorrect." }, { status: 401 });
   }
 

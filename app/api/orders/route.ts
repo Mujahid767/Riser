@@ -6,6 +6,7 @@ import type { OrderItem } from "@/lib/orders/types";
 import { releaseStock, reserveStock } from "@/lib/products/store";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { calculateShipping, DISTRICTS, MAX_QTY_PER_LINE, normalizeBdPhone } from "@/lib/shipping";
+import { sendCapiEvent } from "@/lib/analytics/capi";
 
 export const runtime = "nodejs";
 
@@ -215,6 +216,23 @@ export async function POST(request: Request) {
 
     // Same key arrived twice (double click / retry): hand back the original, undo the extra reservation.
     if (!created && reservations.length) await releaseStock(reservations);
+
+    // Server-side CAPI: fire CODOrderPlaced for new orders only (never for duplicates)
+    if (created) {
+      void sendCapiEvent({
+        eventName: "CODOrderPlaced",
+        eventId: `cod-${order.orderNumber}`,
+        eventSourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd"}/order-success`,
+        userPhone: phone,
+        userEmail: body.customerEmail || undefined,
+        customData: {
+          order_id: order.orderNumber,
+          value: order.total,
+          currency: "BDT",
+          num_items: orderItems.length,
+        },
+      });
+    }
 
     return NextResponse.json(
       { orderNumber: order.orderNumber, total: order.total, subtotal: order.subtotal, shippingFee: order.shippingFee, duplicate: !created },

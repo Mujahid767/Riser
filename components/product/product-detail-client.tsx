@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn, formatPrice, calculateDiscount } from "@/lib/utils";
 import { addToCart } from "@/lib/cart/cart-store";
+import { analytics } from "@/lib/analytics";
 import { MAX_QTY_PER_LINE, SHIPPING_RATES } from "@/lib/shipping";
 import type { StoreProduct } from "@/lib/catalog";
 import ProductCard from "@/components/product/product-card";
@@ -38,6 +39,17 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   const [activeImage, setActiveImage] = useState(product.imageUrl);
   const [imageError, setImageError] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
+
+  // Fire ViewContent once per product page load
+  useEffect(() => {
+    analytics.viewContent({
+      productId: product.id,
+      productName: product.name,
+      category: product.category,
+      price: product.price,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id]);
 
   const discount = calculateDiscount(product.price, product.compareAtPrice);
   const soldOut = product.stock === 0;
@@ -64,6 +76,14 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
       size: selectedSize ?? "",
       color: selectedColor ?? "",
       qty: quantity,
+    });
+    // Fire AddToCart analytics event
+    analytics.addToCart({
+      productId: product.id,
+      productName: product.name,
+      variant: [selectedSize, selectedColor].filter(Boolean).join(" / ") || undefined,
+      price: product.price,
+      quantity,
     });
     setMessage({ type: "ok", text: "Added to your bag." });
     return true;
