@@ -19,8 +19,8 @@ const footerLinks = {
     { label: "Bespoke Fitting", href: "/contact" },
     { label: "Order Tracking", href: "/track-order" },
     { label: "Shipping Policy", href: "/shipping" },
-    { label: "Returns & Exchanges", href: "/returns" },
-    { label: "FAQ", href: "/faq" },
+    { label: "Return & Exchange Policy", href: "/return-policy" },
+    { label: "Privacy Policy", href: "/privacy" },
   ],
   maison: [
     { label: "The Atelier Manifesto", href: "/about" },
