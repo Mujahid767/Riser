@@ -17,6 +17,7 @@ const footerLinks = {
   clientCare: [
     { label: "Size Guide", href: "/size-guide" },
     { label: "Bespoke Fitting", href: "/contact" },
+    { label: "My Wishlist", href: "/wishlist" },
     { label: "Order Tracking", href: "/track-order" },
     { label: "Shipping Policy", href: "/shipping" },
     { label: "Return & Exchange Policy", href: "/return-policy" },

@@ -22,6 +22,8 @@ import { analytics } from "@/lib/analytics";
 import { MAX_QTY_PER_LINE, SHIPPING_RATES } from "@/lib/shipping";
 import type { StoreProduct } from "@/lib/catalog";
 import ProductCard from "@/components/product/product-card";
+import ReviewSection from "@/components/product/review-section";
+import { useWishlist } from "@/lib/wishlist/wishlist-store";
 
 interface ProductDetailClientProps {
   product: StoreProduct;
@@ -30,12 +32,12 @@ interface ProductDetailClientProps {
 
 export default function ProductDetailClient({ product, related }: ProductDetailClientProps) {
   const router = useRouter();
+  const { toggle: toggleWishlist, check: isWishlisted } = useWishlist();
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(
     product.colors?.[0]?.name ?? null
   );
   const [quantity, setQuantity] = useState(1);
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [activeImage, setActiveImage] = useState(product.imageUrl);
   const [imageError, setImageError] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
@@ -352,14 +354,14 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                   {/* Wishlist */}
                   <button
                     type="button"
-                    onClick={() => setIsWishlisted(!isWishlisted)}
+                    onClick={() => toggleWishlist(product.id)}
                     className="w-12 h-12 border border-white/20 bg-black/40 flex items-center justify-center text-white/70 hover:text-white hover:border-white transition-all"
-                    aria-label="Add to wishlist"
+                    aria-label={isWishlisted(product.id) ? "Remove from wishlist" : "Add to wishlist"}
                   >
                     <Heart
                       className={cn(
                         "w-4 h-4",
-                        isWishlisted ? "fill-brand-500 text-brand-500" : ""
+                        isWishlisted(product.id) ? "fill-brand-500 text-brand-500" : ""
                       )}
                     />
                   </button>
@@ -448,6 +450,13 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
             </div>
           </div>
         )}
+      </div>
+
+      {/* Reviews */}
+      <div className="bg-white">
+        <div className="container-store max-w-4xl py-10">
+          <ReviewSection productId={product.id} />
+        </div>
       </div>
     </div>
   );

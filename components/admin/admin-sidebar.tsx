@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ShoppingBag, Package, Users, BarChart3,
-  Tag, Settings, Warehouse, ChevronRight, LogOut, ImageIcon, PenLine,
+  Tag, Settings, Warehouse, ChevronRight, LogOut, ImageIcon, PenLine, Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +30,7 @@ const NAV_SECTIONS = [
       { label: "Products", href: "/admin/products", icon: Package },
       { label: "Inventory", href: "/admin/inventory", icon: Warehouse },
       { label: "Coupons", href: "/admin/coupons", icon: Tag },
+      { label: "Reviews", href: "/admin/reviews", icon: Star },
     ],
   },
   {

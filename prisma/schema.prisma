@@ -108,6 +108,7 @@ model Product {
   updatedAt        DateTime      @updatedAt
 
   orderItems    OrderItem[]
+  reviews       Review[]
 
   @@index([slug])
   @@index([status])
@@ -162,6 +163,7 @@ model Order {
   updatedAt        DateTime      @updatedAt
 
   items            OrderItem[]
+  reviews          Review[]
 
   @@index([orderNumber])
   @@index([customerPhone])
@@ -194,4 +196,58 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@map("order_items")
+}
+
+// ─────────────────────────────────────────────
+// COUPONS
+// ─────────────────────────────────────────────
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+model Coupon {
+  id           String     @id @default(cuid())
+  code         String     @unique // e.g. "EID30"
+  type         CouponType @default(PERCENT)
+  value        Decimal    @db.Decimal(10, 2) // 30 = 30% or ৳30
+  minOrderAmount Decimal? @db.Decimal(10, 2) // minimum cart total to apply
+  maxUses      Int?       // null = unlimited
+  usedCount    Int        @default(0)
+  expiresAt    DateTime?
+  active       Boolean    @default(true)
+  description  String?    // admin note
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([code])
+  @@index([active])
+  @@map("coupons")
+}
+
+// ─────────────────────────────────────────────
+// REVIEWS
+// ─────────────────────────────────────────────
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String
+  orderId   String?  // link to the order (optional for data integrity)
+  rating    Int      // 1-5
+  comment   String?  @db.Text
+  name      String   // display name
+  approved  Boolean  @default(false) // admin approves before showing
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@index([orderId])
+  @@index([approved])
+  @@map("reviews")
 }

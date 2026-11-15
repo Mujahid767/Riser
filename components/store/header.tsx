@@ -256,7 +256,7 @@ export default function Header() {
 
               {/* Wishlist Link */}
               <Link
-                href="/shop?filter=wishlist"
+                href="/wishlist"
                 className="hidden sm:flex p-2 text-neutral-300 hover:text-white transition-colors"
                 aria-label="Wishlist"
               >

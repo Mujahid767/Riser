@@ -7,6 +7,7 @@ import { releaseStock, reserveStock } from "@/lib/products/store";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { calculateShipping, DISTRICTS, MAX_QTY_PER_LINE, normalizeBdPhone } from "@/lib/shipping";
 import { sendCapiEvent } from "@/lib/analytics/capi";
+import { validateCoupon, useCoupon } from "@/lib/coupons";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,7 @@ const bodySchema = z.object({
   paymentMethod: z.literal("COD"),
   customerNotes: z.string().trim().max(500).optional(),
   expectedTotal: z.number().int().nonnegative(),
+  couponCode: z.string().trim().max(50).optional(),
   items: z
     .array(
       z.object({
@@ -149,7 +151,20 @@ export async function POST(request: Request) {
 
   const subtotal = orderItems.reduce((s, i) => s + i.unitPrice * i.qty, 0);
   const shippingFee = calculateShipping(body.district, subtotal);
-  const total = subtotal + shippingFee;
+
+  // 4b. Validate coupon (if provided)
+  let couponDiscount = 0;
+  let appliedCouponCode: string | undefined;
+  if (body.couponCode) {
+    const couponResult = await validateCoupon(body.couponCode, subtotal);
+    if (!couponResult.valid) {
+      return NextResponse.json({ error: couponResult.error, code: "COUPON_INVALID" }, { status: 400 });
+    }
+    couponDiscount = couponResult.discount;
+    appliedCouponCode = couponResult.code;
+  }
+
+  const total = Math.max(0, subtotal + shippingFee - couponDiscount);
 
   const syncLines = checks.map((c) => ({
     key: c.key,
@@ -204,7 +219,7 @@ export async function POST(request: Request) {
         items: orderItems,
         subtotal,
         shippingFee,
-        discount: 0,
+        discount: couponDiscount,
         total,
         paymentMethod: "COD",
         paymentStatus: "PENDING",
@@ -216,6 +231,11 @@ export async function POST(request: Request) {
 
     // Same key arrived twice (double click / retry): hand back the original, undo the extra reservation.
     if (!created && reservations.length) await releaseStock(reservations);
+
+    // Consume coupon on new orders only
+    if (created && appliedCouponCode) {
+      void useCoupon(appliedCouponCode);
+    }
 
     // Server-side CAPI: fire CODOrderPlaced for new orders only (never for duplicates)
     if (created) {
@@ -235,7 +255,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { orderNumber: order.orderNumber, total: order.total, subtotal: order.subtotal, shippingFee: order.shippingFee, duplicate: !created },
+      { orderNumber: order.orderNumber, total: order.total, subtotal: order.subtotal, shippingFee: order.shippingFee, discount: couponDiscount, duplicate: !created },
       { status: created ? 201 : 200 }
     );
   } catch (error) {

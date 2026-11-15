@@ -9,6 +9,7 @@ import { cn, formatPrice } from "@/lib/utils";
 import { clearCart, syncCartFromServer, useCart } from "@/lib/cart/cart-store";
 import { calculateShipping, DISTRICTS } from "@/lib/shipping";
 import { analytics } from "@/lib/analytics";
+import CouponInput from "./coupon-input";
 
 const PAYMENT_METHODS = [
   { id: "COD", label: "Cash on Delivery", desc: "Pay in cash when your order arrives", available: true },
@@ -81,6 +82,7 @@ export default function CheckoutClient() {
   const [submitting, setSubmitting] = useState(false);
   const [placed, setPlaced] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [coupon, setCoupon] = useState<{ code: string; discount: number } | null>(null);
 
   useEffect(() => setHydrated(true), []);
 
@@ -100,7 +102,8 @@ export default function CheckoutClient() {
     () => (fields.district ? calculateShipping(fields.district, subtotal) : null),
     [fields.district, subtotal]
   );
-  const total = subtotal + (shipping ?? 0);
+  const discount = coupon?.discount ?? 0;
+  const total = Math.max(0, subtotal + (shipping ?? 0) - discount);
 
   const set = (name: keyof Fields) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -147,6 +150,7 @@ export default function CheckoutClient() {
           customerNotes: fields.customerNotes || undefined,
           paymentMethod: "COD",
           expectedTotal: total,
+          couponCode: coupon?.code || undefined,
           items: lines.map((l) => ({
             productId: l.productId,
             size: l.size,
@@ -391,6 +395,22 @@ export default function CheckoutClient() {
                     {shipping === null ? "Select district" : shipping === 0 ? "FREE" : formatPrice(shipping)}
                   </span>
                 </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-green-400">
+                    <span>COUPON ({coupon?.code})</span>
+                    <span className="font-bold">-{formatPrice(discount)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Coupon input */}
+              <div className="mt-4">
+                <CouponInput
+                  subtotal={subtotal}
+                  applied={coupon}
+                  onApply={(d, code) => setCoupon({ code, discount: d })}
+                  onRemove={() => setCoupon(null)}
+                />
               </div>
 
               <div className="border-t border-white/10 mt-4 pt-4 flex justify-between font-mono text-sm font-bold text-white">

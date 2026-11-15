@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Heart, ShoppingBag, Eye, ArrowUpRight } from "lucide-react";
 import { cn, formatPrice, calculateDiscount } from "@/lib/utils";
+import { useWishlist } from "@/lib/wishlist/wishlist-store";
 
 interface ProductCardProps {
   id: string;
@@ -46,7 +47,7 @@ export default function ProductCard({
   stock,
   className,
 }: ProductCardProps) {
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const { toggle: toggleWishlist, check: isWishlisted } = useWishlist();
   const [imageError, setImageError] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const discount = calculateDiscount(price, compareAtPrice);
@@ -54,7 +55,7 @@ export default function ProductCard({
   const handleWishlist = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsWishlisted(!isWishlisted);
+    toggleWishlist(id);
   };
 
   return (
@@ -140,12 +141,12 @@ export default function ProductCard({
             <button
               onClick={handleWishlist}
               className="pointer-events-auto w-8 h-8 rounded-full bg-black/60 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:border-white/40 transition-all hover:scale-110"
-              aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+              aria-label={isWishlisted(id) ? "Remove from wishlist" : "Add to wishlist"}
             >
               <Heart
                 className={cn(
                   "w-3.5 h-3.5 transition-colors",
-                  isWishlisted ? "fill-brand-500 text-brand-500" : ""
+                  isWishlisted(id) ? "fill-brand-500 text-brand-500" : ""
                 )}
               />
             </button>
