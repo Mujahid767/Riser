@@ -33,6 +33,7 @@ function fromDb(row: {
   galleryImages: unknown;
   colors: unknown;
   sizes: unknown;
+  sizePrices?: unknown;
   editionBadge: string | null;
   isNew: boolean;
   isBestSeller: boolean;
@@ -45,6 +46,13 @@ function fromDb(row: {
     ? (row.colors as ProductColor[])
     : [];
   const sizes = Array.isArray(row.sizes) ? (row.sizes as string[]) : [];
+  const sizePrices: Record<string, number> = {};
+  if (row.sizePrices && typeof row.sizePrices === "object" && !Array.isArray(row.sizePrices)) {
+    for (const [k, v] of Object.entries(row.sizePrices as Record<string, unknown>)) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) sizePrices[k] = n;
+    }
+  }
   const gallery = Array.isArray(row.galleryImages)
     ? (row.galleryImages as string[])
     : [];
@@ -66,6 +74,7 @@ function fromDb(row: {
     editionBadge: row.editionBadge ?? undefined,
     colors,
     sizes,
+    sizePrices,
     category: (row.category ?? "baby-frock") as AdminProduct["category"],
     department: (row.department ?? "petite") as AdminProduct["department"],
     description: row.description ?? "",

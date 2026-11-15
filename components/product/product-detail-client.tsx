@@ -21,6 +21,7 @@ import { addToCart } from "@/lib/cart/cart-store";
 import { analytics } from "@/lib/analytics";
 import { MAX_QTY_PER_LINE, SHIPPING_RATES } from "@/lib/shipping";
 import type { StoreProduct } from "@/lib/catalog";
+import { getPriceForSize } from "@/lib/products/types";
 import ProductCard from "@/components/product/product-card";
 import ReviewSection from "@/components/product/review-section";
 import { useWishlist } from "@/lib/wishlist/wishlist-store";
@@ -53,7 +54,15 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);
 
-  const discount = calculateDiscount(product.price, product.compareAtPrice);
+  const activePrice = getPriceForSize(product.price, product.sizePrices, selectedSize);
+  const allSizePrices = (product.sizes ?? []).map((s) =>
+    getPriceForSize(product.price, product.sizePrices, s)
+  );
+  const minSizePrice = allSizePrices.length > 0 ? Math.min(...allSizePrices) : product.price;
+  const maxSizePrice = allSizePrices.length > 0 ? Math.max(...allSizePrices) : product.price;
+  const hasMultiplePrices = minSizePrice !== maxSizePrice;
+
+  const discount = calculateDiscount(activePrice, product.compareAtPrice);
   const soldOut = product.stock === 0;
   const maxQty = Math.min(MAX_QTY_PER_LINE, product.stock ?? MAX_QTY_PER_LINE);
   const lowStock = product.stock !== undefined && product.stock > 0 && product.stock <= 5;
@@ -74,7 +83,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
       slug: product.slug,
       name: product.name,
       imageUrl: product.imageUrl,
-      price: product.price,
+      price: activePrice,
       size: selectedSize ?? "",
       color: selectedColor ?? "",
       qty: quantity,
@@ -84,7 +93,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
       productId: product.id,
       productName: product.name,
       variant: [selectedSize, selectedColor].filter(Boolean).join(" / ") || undefined,
-      price: product.price,
+      price: activePrice,
       quantity,
     });
     setMessage({ type: "ok", text: "Added to your bag." });
@@ -216,15 +225,17 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               {/* Price */}
               <div className="flex items-baseline gap-3 mb-6">
                 <span className="text-2xl sm:text-3xl font-mono font-bold text-white tracking-tight">
-                  {formatPrice(product.price)}
+                  {selectedSize || !hasMultiplePrices
+                    ? formatPrice(activePrice)
+                    : `${formatPrice(minSizePrice)} – ${formatPrice(maxSizePrice)}`}
                 </span>
-                {product.compareAtPrice && product.compareAtPrice > product.price && (
+                {product.compareAtPrice && product.compareAtPrice > activePrice && (
                   <span className="text-sm font-mono text-neutral-500 line-through">
                     {formatPrice(product.compareAtPrice)}
                   </span>
                 )}
                 <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest ml-2">
-                  INCLUSIVE OF ALL TAXES
+                  {selectedSize ? `SIZE ${selectedSize}` : "INCLUSIVE OF ALL TAXES"}
                 </span>
               </div>
 
@@ -291,25 +302,38 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                       MEASUREMENT GUIDE
                     </Link>
                   </div>
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                    {product.sizes.map((size) => (
-                      <button
-                        key={size}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSize(size);
-                          setMessage(null);
-                        }}
-                        className={cn(
-                          "py-2.5 text-xs font-mono tracking-wider uppercase border transition-all text-center",
-                          selectedSize === size
-                            ? "bg-white text-black border-white font-bold shadow-lg shadow-white/20"
-                            : "bg-black/50 text-neutral-300 border-white/15 hover:border-white/50 hover:text-white"
-                        )}
-                      >
-                        {size}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {product.sizes.map((size) => {
+                      const sizePrice = getPriceForSize(product.price, product.sizePrices, size);
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSize(size);
+                            setMessage(null);
+                          }}
+                          className={cn(
+                            "py-2.5 px-2 text-xs font-mono tracking-wider uppercase border transition-all text-center flex flex-col items-center justify-center gap-0.5",
+                            selectedSize === size
+                              ? "bg-white text-black border-white font-bold shadow-lg shadow-white/20"
+                              : "bg-black/50 text-neutral-300 border-white/15 hover:border-white/50 hover:text-white"
+                          )}
+                        >
+                          <span>{size}</span>
+                          {hasMultiplePrices && (
+                            <span
+                              className={cn(
+                                "text-[10px]",
+                                selectedSize === size ? "text-neutral-700" : "text-brand-400"
+                              )}
+                            >
+                              {formatPrice(sizePrice)}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

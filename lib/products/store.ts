@@ -29,6 +29,7 @@ function toAdminProduct(row: {
   galleryImages: unknown;
   colors: unknown;
   sizes: unknown;
+  sizePrices?: unknown;
   editionBadge: string | null;
   isNew: boolean;
   isBestSeller: boolean;
@@ -44,6 +45,13 @@ function toAdminProduct(row: {
     ? (row.colors as ProductColor[])
     : [];
   const sizes = Array.isArray(row.sizes) ? (row.sizes as string[]) : [];
+  const sizePrices: Record<string, number> = {};
+  if (row.sizePrices && typeof row.sizePrices === "object" && !Array.isArray(row.sizePrices)) {
+    for (const [k, v] of Object.entries(row.sizePrices as Record<string, unknown>)) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) sizePrices[k] = n;
+    }
+  }
   const gallery = Array.isArray(row.galleryImages)
     ? (row.galleryImages as string[])
     : [];
@@ -65,6 +73,7 @@ function toAdminProduct(row: {
     images: gallery,
     colors,
     sizes,
+    sizePrices,
     editionBadge: row.editionBadge ?? undefined,
     isNew: row.isNew,
     isBestSeller: row.isBestSeller,
@@ -142,6 +151,7 @@ export async function createProduct(
       galleryImages: (input.images ?? []) as never,
       colors: (input.colors ?? []) as never,
       sizes: (input.sizes ?? []) as never,
+      sizePrices: (input.sizePrices ?? {}) as never,
       editionBadge: input.editionBadge ?? null,
       isNew: input.isNew ?? false,
       isBestSeller: input.isBestSeller ?? false,
@@ -201,6 +211,9 @@ export async function updateProduct(
         : {}),
       ...(input.sizes !== undefined
         ? { sizes: (input.sizes ?? []) as never }
+        : {}),
+      ...(input.sizePrices !== undefined
+        ? { sizePrices: (input.sizePrices ?? {}) as never }
         : {}),
       ...(input.editionBadge !== undefined
         ? { editionBadge: input.editionBadge ?? null }

@@ -20,6 +20,8 @@ export interface SeedProduct {
   editionBadge?: string;
   colors?: Array<{ name: string; value: string }>;
   sizes?: string[];
+  /** Optional price per size override e.g. { "16-20": 650, "22-26": 750 } */
+  sizePrices?: Record<string, number>;
   category:
     | "baby-frock"
     | "two-piece-kids"

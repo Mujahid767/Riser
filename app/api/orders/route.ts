@@ -4,6 +4,7 @@ import { loadCatalog } from "@/lib/catalog";
 import { createOrderIdempotent } from "@/lib/orders/store";
 import type { OrderItem } from "@/lib/orders/types";
 import { releaseStock, reserveStock } from "@/lib/products/store";
+import { getPriceForSize } from "@/lib/products/types";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { calculateShipping, DISTRICTS, MAX_QTY_PER_LINE, normalizeBdPhone } from "@/lib/shipping";
 import { sendCapiEvent } from "@/lib/analytics/capi";
@@ -125,9 +126,10 @@ export async function POST(request: Request) {
       problem = true;
       continue;
     }
+    const unitPrice = getPriceForSize(product.price, product.sizePrices, it.size);
     const tracked = product.source === "admin";
     const maxQty = tracked ? Math.max(0, product.stock ?? 0) : null;
-    checks.push({ key, ...it, unitPrice: product.price, maxQty, available: maxQty === null || maxQty > 0 });
+    checks.push({ key, ...it, unitPrice, maxQty, available: maxQty === null || maxQty > 0 });
     orderItems.push({
       productId: product.id,
       productName: product.name,
@@ -135,7 +137,7 @@ export async function POST(request: Request) {
       size: it.size,
       color: it.color,
       qty: it.qty,
-      unitPrice: product.price,
+      unitPrice,
     });
     if (tracked) stockNeeds.set(product.id, (stockNeeds.get(product.id) ?? 0) + it.qty);
   }

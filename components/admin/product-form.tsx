@@ -27,6 +27,7 @@ const BLANK: Omit<AdminProduct, "id" | "createdAt" | "updatedAt"> = {
   images: [],
   colors: [],
   sizes: [],
+  sizePrices: {},
   fabric: "",
   description: "",
   editionBadge: "",
@@ -56,6 +57,7 @@ export default function ProductForm({ mode, initial }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [customSize, setCustomSize] = useState("");
 
   // helpers
   const set = (patch: Partial<typeof data>) => setData((d) => ({ ...d, ...patch }));
@@ -65,7 +67,39 @@ export default function ProductForm({ mode, initial }: Props) {
     : KIDS_SIZES;
 
   function toggleSize(s: string) {
-    set({ sizes: data.sizes.includes(s) ? data.sizes.filter((x) => x !== s) : [...data.sizes, s] });
+    if (data.sizes.includes(s)) {
+      const nextPrices = { ...(data.sizePrices ?? {}) };
+      delete nextPrices[s];
+      set({ sizes: data.sizes.filter((x) => x !== s), sizePrices: nextPrices });
+    } else {
+      set({ sizes: [...data.sizes, s] });
+    }
+  }
+
+  function addCustomSize() {
+    const s = customSize.trim().toUpperCase();
+    if (!s) return;
+    if (!data.sizes.includes(s)) {
+      set({ sizes: [...data.sizes, s] });
+    }
+    setCustomSize("");
+  }
+
+  function setSizePrice(size: string, val: string) {
+    const next = { ...(data.sizePrices ?? {}) };
+    const num = Number(val);
+    if (!val || !Number.isFinite(num) || num <= 0) {
+      delete next[size];
+    } else {
+      next[size] = num;
+    }
+    // Also auto-fill base price with the minimum size price if base price is 0
+    const allPrices = Object.values(next).filter((v) => v > 0);
+    const minPrice = allPrices.length > 0 ? Math.min(...allPrices) : data.price;
+    set({
+      sizePrices: next,
+      ...(data.price === 0 && minPrice > 0 ? { price: minPrice } : {}),
+    });
   }
 
   function autoSlug() {
@@ -77,12 +111,20 @@ export default function ProductForm({ mode, initial }: Props) {
   async function save() {
     setSaving(true);
     setError("");
+    const sizePriceValues = Object.values(data.sizePrices ?? {}).filter((v) => v > 0);
+    const effectiveBasePrice =
+      data.price > 0
+        ? data.price
+        : sizePriceValues.length > 0
+        ? Math.min(...sizePriceValues)
+        : 0;
+    const payload = { ...data, price: effectiveBasePrice };
     const url = mode === "edit" && initial ? `/api/admin/products?id=${initial.id}` : "/api/admin/products";
     const method = mode === "edit" ? "PUT" : "POST";
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
     const json = (await res.json().catch(() => ({}))) as { error?: string; product?: AdminProduct };
     setSaving(false);
@@ -200,18 +242,26 @@ export default function ProductForm({ mode, initial }: Props) {
             </div>
           </section>
 
-          {/* Sizes */}
+          {/* Sizes & Per-Size Pricing */}
           <section className="bg-admin-card border border-admin-border p-5 space-y-4">
-            <h2 className="text-white font-semibold text-sm uppercase tracking-wider">Sizes</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-semibold text-sm uppercase tracking-wider">
+                Sizes &amp; Per-Size Pricing
+              </h2>
+              <span className="text-[10px] font-mono text-neutral-500">
+                Click sizes or add custom range (e.g. 16-20, 22-26)
+              </span>
+            </div>
+
             <div className="flex flex-wrap gap-2">
-              {sizeOptions.map((s) => (
+              {Array.from(new Set([...sizeOptions, ...data.sizes])).map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => toggleSize(s)}
                   className={`px-3 py-1.5 text-xs font-mono border transition-colors ${
                     data.sizes.includes(s)
-                      ? "border-white bg-white text-black"
+                      ? "border-white bg-white text-black font-bold"
                       : "border-white/15 text-neutral-400 hover:border-white/40"
                   }`}
                 >
@@ -219,7 +269,73 @@ export default function ProductForm({ mode, initial }: Props) {
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-neutral-600">Selected: {data.sizes.length === 0 ? "none" : data.sizes.join(", ")}</p>
+
+            {/* Add custom size range */}
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                value={customSize}
+                onChange={(e) => setCustomSize(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCustomSize();
+                  }
+                }}
+                placeholder="Add custom size / range (e.g. 16-20, 22-26, 28-32, 34-38)"
+                className="flex-1 bg-black/40 border border-white/10 px-3 py-2 text-xs font-mono text-white outline-none focus:border-white/50 placeholder:text-neutral-600"
+              />
+              <button
+                type="button"
+                onClick={addCustomSize}
+                className="px-3 py-2 text-xs font-mono uppercase tracking-wider border border-white/20 text-white hover:bg-white hover:text-black transition-colors"
+              >
+                + Add Size
+              </button>
+            </div>
+
+            {/* Per-Size Price Table */}
+            {data.sizes.length > 0 && (
+              <div className="pt-3 border-t border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-widest text-neutral-400">
+                    Price per Size (৳) — leave blank to use base price ({data.price ? `৳${data.price}` : "not set"})
+                  </span>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-2.5">
+                  {data.sizes.map((s) => (
+                    <div
+                      key={s}
+                      className="flex items-center gap-2 bg-black/30 border border-white/10 px-3 py-2"
+                    >
+                      <span className="text-xs font-mono font-bold text-white min-w-[64px]">
+                        Size {s}
+                      </span>
+                      <div className="relative flex-1">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-neutral-500">
+                          ৳
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={data.sizePrices?.[s] ?? ""}
+                          onChange={(e) => setSizePrice(s, e.target.value)}
+                          placeholder={data.price ? `${data.price} (default)` : "Price in ৳"}
+                          className="w-full bg-black/50 border border-white/10 pl-6 pr-2 py-1.5 text-xs font-mono text-white outline-none focus:border-white/50 placeholder:text-neutral-600"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleSize(s)}
+                        className="text-neutral-500 hover:text-red-400 p-1"
+                        title={`Remove size ${s}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Colors */}

@@ -27,6 +27,7 @@ export type AdminProduct = {
   images: string[]; // gallery
   colors: ProductColor[];
   sizes: string[];
+  sizePrices?: Record<string, number>;
   fabric: string;
   description: string;
   editionBadge?: string;
@@ -56,6 +57,18 @@ export const DEPARTMENTS: { value: AdminProduct["department"]; label: string }[]
   { value: "women", label: "Maison Femme (Women)" },
 ];
 
-export const KIDS_SIZES = ["0-6M", "6-12M", "1-2Y", "2-3Y", "3-4Y", "4-5Y", "5-6Y", "6-7Y", "7-8Y", "8-10Y", "10-12Y"];
-export const WOMEN_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+export const KIDS_SIZES = ["16-20", "22-26", "28-32", "34-38", "0-6M", "6-12M", "1-2Y", "2-3Y", "3-4Y", "4-5Y", "5-6Y", "6-7Y", "7-8Y", "8-10Y", "10-12Y"];
+export const WOMEN_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "34-38", "40-44"];
+
+/** Resolve effective unit price for a given size (falls back to base price). */
+export function getPriceForSize(
+  basePrice: number,
+  sizePrices?: Record<string, number> | null,
+  size?: string | null
+): number {
+  if (size && sizePrices && typeof sizePrices[size] === "number" && sizePrices[size] > 0) {
+    return sizePrices[size];
+  }
+  return basePrice;
+}
 

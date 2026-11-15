@@ -86,6 +86,8 @@ model Product {
   colors           Json          @default("[]")
   // Each size: string
   sizes            Json          @default("[]")
+  // Optional price override per size: Record<string, number> e.g. { "16-20": 650, "22-26": 750 }
+  sizePrices       Json          @default("{}")
 
   // Badges
   editionBadge     String?

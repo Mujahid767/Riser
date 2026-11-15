@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Heart, ShoppingBag, Eye, ArrowUpRight } from "lucide-react";
 import { cn, formatPrice, calculateDiscount } from "@/lib/utils";
 import { useWishlist } from "@/lib/wishlist/wishlist-store";
+import { getPriceForSize } from "@/lib/products/types";
 
 interface ProductCardProps {
   id: string;
@@ -23,6 +24,7 @@ interface ProductCardProps {
   fabric?: string;
   colors?: Array<{ name: string; value: string }>;
   sizes?: string[];
+  sizePrices?: Record<string, number>;
   /** Units left. 0 = sold out. undefined = not tracked. */
   stock?: number;
   className?: string;
@@ -44,13 +46,19 @@ export default function ProductCard({
   fabric,
   colors = [],
   sizes = [],
+  sizePrices,
   stock,
   className,
 }: ProductCardProps) {
   const { toggle: toggleWishlist, check: isWishlisted } = useWishlist();
   const [imageError, setImageError] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const discount = calculateDiscount(price, compareAtPrice);
+  const activePrice = getPriceForSize(price, sizePrices, selectedSize);
+  const allSizePrices = sizes.map((s) => getPriceForSize(price, sizePrices, s));
+  const minSizePrice = allSizePrices.length > 0 ? Math.min(...allSizePrices) : price;
+  const maxSizePrice = allSizePrices.length > 0 ? Math.max(...allSizePrices) : price;
+  const hasMultiplePrices = minSizePrice !== maxSizePrice;
+  const discount = calculateDiscount(activePrice, compareAtPrice);
 
   const handleWishlist = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -216,9 +224,11 @@ export default function ProductCard({
           {/* Price & Currency */}
           <div className="flex items-baseline gap-2 pt-1 border-t border-white/5">
             <span className="font-mono text-sm sm:text-base font-bold text-white tracking-tight">
-              {formatPrice(price)}
+              {selectedSize || !hasMultiplePrices
+                ? formatPrice(activePrice)
+                : `${formatPrice(minSizePrice)} – ${formatPrice(maxSizePrice)}`}
             </span>
-            {compareAtPrice && compareAtPrice > price && (
+            {compareAtPrice && compareAtPrice > activePrice && (
               <span className="font-mono text-xs text-neutral-500 line-through">
                 {formatPrice(compareAtPrice)}
               </span>
