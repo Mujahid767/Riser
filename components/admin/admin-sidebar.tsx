@@ -3,24 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, ShoppingBag, Package, Users, BarChart3,
-  Tag, Settings, Warehouse, ChevronRight, LogOut, ImageIcon, PenLine, Star,
+  LayoutDashboard, ShoppingBag, Package,
+  Tag, ChevronRight, LogOut, ImageIcon, PenLine, Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_SECTIONS = [
   {
-    title: "Website",
-    items: [
-      { label: "Page text", href: "/admin/content", icon: PenLine },
-      { label: "Photos", href: "/admin/media", icon: ImageIcon },
-    ],
-  },
-  {
     title: "Overview",
     items: [
       { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-      { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
     ],
   },
   {
@@ -28,21 +20,15 @@ const NAV_SECTIONS = [
     items: [
       { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
       { label: "Products", href: "/admin/products", icon: Package },
-      { label: "Inventory", href: "/admin/inventory", icon: Warehouse },
       { label: "Coupons", href: "/admin/coupons", icon: Tag },
       { label: "Reviews", href: "/admin/reviews", icon: Star },
     ],
   },
   {
-    title: "Customers",
+    title: "Website",
     items: [
-      { label: "Customers", href: "/admin/customers", icon: Users },
-    ],
-  },
-  {
-    title: "System",
-    items: [
-      { label: "Settings", href: "/admin/settings", icon: Settings },
+      { label: "Page text", href: "/admin/content", icon: PenLine },
+      { label: "Photos", href: "/admin/media", icon: ImageIcon },
     ],
   },
 ];
