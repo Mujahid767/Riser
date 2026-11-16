@@ -31,6 +31,11 @@ type DbOrder = {
   customerNotes: string | null;
   adminNotes: string | null;
   trackingNumber: string | null;
+  courierProvider: string | null;
+  courierConsignmentId: string | null;
+  courierTrackingCode: string | null;
+  courierStatus: string | null;
+  courierSentAt: Date | null;
   idempotencyKey: string | null;
   flags: unknown;
   createdAt: Date;
@@ -76,6 +81,16 @@ function toAdminOrder(row: DbOrder): AdminOrder {
     note: row.adminNotes ?? undefined,
     customerNote: row.customerNotes ?? undefined,
     trackingNumber: row.trackingNumber ?? undefined,
+    courier:
+      row.courierProvider && row.courierConsignmentId
+        ? {
+            provider: row.courierProvider,
+            consignmentId: row.courierConsignmentId,
+            trackingCode: row.courierTrackingCode ?? "",
+            status: row.courierStatus ?? "",
+            sentAt: (row.courierSentAt ?? row.updatedAt).toISOString(),
+          }
+        : undefined,
     idempotencyKey: row.idempotencyKey ?? undefined,
     flags,
     createdAt: row.createdAt.toISOString(),
@@ -205,6 +220,45 @@ export async function updateOrder(
         ? { trackingNumber: input.trackingNumber ?? null }
         : {}),
       ...(input.note !== undefined ? { adminNotes: input.note ?? null } : {}),
+    },
+    include: { items: true },
+  });
+  return toAdminOrder(row);
+}
+
+/** Atomically mark an order as "being sent" so a double-click can't create two consignments. */
+export async function claimCourierSend(id: string, provider: string): Promise<boolean> {
+  const r = await prisma.order.updateMany({
+    where: { id, courierProvider: null },
+    data: { courierProvider: provider, courierStatus: "sending" },
+  });
+  return r.count === 1;
+}
+
+/** Undo claimCourierSend after a failed API call so the admin can retry. */
+export async function releaseCourierClaim(id: string): Promise<void> {
+  await prisma.order.updateMany({
+    where: { id, courierConsignmentId: null },
+    data: { courierProvider: null, courierStatus: null },
+  });
+}
+
+/** Record a Steadfast consignment against an order (also fills the tracking number). */
+export async function saveCourierConsignment(
+  id: string,
+  c: { provider: string; consignmentId: string; trackingCode: string; status: string }
+): Promise<AdminOrder | null> {
+  const existing = await prisma.order.findUnique({ where: { id } });
+  if (!existing) return null;
+  const row = await prisma.order.update({
+    where: { id },
+    data: {
+      courierProvider: c.provider,
+      courierConsignmentId: c.consignmentId,
+      courierTrackingCode: c.trackingCode || null,
+      courierStatus: c.status,
+      courierSentAt: new Date(),
+      trackingNumber: c.trackingCode || existing.trackingNumber,
     },
     include: { items: true },
   });

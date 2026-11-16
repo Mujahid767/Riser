@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ShoppingBag, Package,
-  Tag, ChevronRight, LogOut, ImageIcon, PenLine, Star,
+  Tag, ChevronRight, LogOut, ImageIcon, PenLine, Star, Truck, TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +29,13 @@ const NAV_SECTIONS = [
     items: [
       { label: "Page text", href: "/admin/content", icon: PenLine },
       { label: "Photos", href: "/admin/media", icon: ImageIcon },
+    ],
+  },
+  {
+    title: "Settings",
+    items: [
+      { label: "SEO & Marketing", href: "/admin/settings/marketing", icon: TrendingUp },
+      { label: "Courier (Steadfast)", href: "/admin/settings", icon: Truck },
     ],
   },
 ];
@@ -58,7 +65,10 @@ export default function AdminSidebar({ email }: { email: string }) {
             </p>
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                const isActive =
+                  item.href === "/admin/settings"
+                    ? pathname === "/admin/settings"
+                    : pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
                   <Link
                     key={item.href}

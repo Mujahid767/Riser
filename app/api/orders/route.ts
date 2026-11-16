@@ -239,14 +239,48 @@ export async function POST(request: Request) {
       void useCoupon(appliedCouponCode);
     }
 
-    // Server-side CAPI: fire CODOrderPlaced for new orders only (never for duplicates)
+    // Server-side CAPI: fire Purchase and CODOrderPlaced for new genuine orders only
     if (created) {
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd";
+      const userAgent = request.headers.get("user-agent") || undefined;
+      const ip = clientIp(request);
+
+      // 1. Purchase event with deduplication key pur-${order.orderNumber}
+      void sendCapiEvent({
+        eventName: "Purchase",
+        eventId: `pur-${order.orderNumber}`,
+        eventSourceUrl: `${siteUrl}/order-success?order=${order.orderNumber}`,
+        userPhone: phone,
+        userEmail: body.customerEmail || undefined,
+        userName: body.customerName,
+        userCity: body.district,
+        clientIp: ip,
+        clientUserAgent: userAgent,
+        customData: {
+          order_id: order.orderNumber,
+          value: order.total,
+          currency: "BDT",
+          num_items: orderItems.reduce((s, i) => s + i.qty, 0),
+          content_type: "product",
+          contents: orderItems.map((i) => ({
+            id: i.productId,
+            quantity: i.qty,
+            item_price: i.unitPrice,
+          })),
+        },
+      });
+
+      // 2. CODOrderPlaced event
       void sendCapiEvent({
         eventName: "CODOrderPlaced",
         eventId: `cod-${order.orderNumber}`,
-        eventSourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd"}/order-success`,
+        eventSourceUrl: `${siteUrl}/order-success?order=${order.orderNumber}`,
         userPhone: phone,
         userEmail: body.customerEmail || undefined,
+        userName: body.customerName,
+        userCity: body.district,
+        clientIp: ip,
+        clientUserAgent: userAgent,
         customData: {
           order_id: order.orderNumber,
           value: order.total,

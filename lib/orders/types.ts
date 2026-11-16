@@ -41,6 +41,14 @@ export type AdminOrder = {
   /** Instructions the customer typed at checkout */
   customerNote?: string;
   trackingNumber?: string;
+  /** Steadfast consignment — set once the admin presses "Send to Steadfast" */
+  courier?: {
+    provider: string;
+    consignmentId: string;
+    trackingCode: string;
+    status: string;
+    sentAt: string;
+  };
   /** Client-generated key — a retried/double-clicked submit returns the same order */
   idempotencyKey?: string;
   /** Automatic review flags, e.g. "repeat_phone_24h" */

@@ -67,13 +67,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       select: { slug: true, updatedAt: true, imageUrl: true },
     });
 
-    productPages = products.map((p) => ({
-      url: `${baseUrl}/product/${p.slug}`,
-      lastModified: p.updatedAt,
-      changeFrequency: "weekly" as const,
-      priority: 0.8,
-      images: p.imageUrl ? [p.imageUrl] : undefined,
-    }));
+    productPages = products.map((p) => {
+      const imgUrl = p.imageUrl
+        ? p.imageUrl.startsWith("http")
+          ? p.imageUrl
+          : `${baseUrl}${p.imageUrl.startsWith("/") ? "" : "/"}${p.imageUrl}`
+        : undefined;
+
+      return {
+        url: `${baseUrl}/product/${p.slug}`,
+        lastModified: p.updatedAt,
+        changeFrequency: "weekly" as const,
+        priority: 0.8,
+        images: imgUrl ? [imgUrl] : undefined,
+      };
+    });
   } catch {
     // If DB is unavailable, return static pages only
   }

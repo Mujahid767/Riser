@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, ShoppingBag } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
 import { clearCart, syncCartFromServer, useCart } from "@/lib/cart/cart-store";
-import { calculateShipping, DISTRICTS } from "@/lib/shipping";
+import { calculateShipping, DISTRICTS, districtLabel, SHIPPING_RATES } from "@/lib/shipping";
 import { analytics } from "@/lib/analytics";
 import CouponInput from "./coupon-input";
 
@@ -303,9 +303,12 @@ export default function CheckoutClient() {
                   <select id="district" autoComplete="address-level1" value={fields.district} onChange={set("district")} className="input-field">
                     <option value="">Select district</option>
                     {DISTRICTS.map((d) => (
-                      <option key={d} value={d}>{d}</option>
+                      <option key={d} value={d}>{districtLabel(d)}</option>
                     ))}
                   </select>
+                  <p className="text-[10px] font-mono text-neutral-500 mt-1 uppercase">
+                    Delivery: ৳{SHIPPING_RATES.dhaka} inside Dhaka · ৳{SHIPPING_RATES.outsideDhaka} outside Dhaka
+                  </p>
                   <FieldError message={errors.district} />
                 </div>
                 <div>
@@ -390,7 +393,12 @@ export default function CheckoutClient() {
                   <span className="text-white font-bold">{formatPrice(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-neutral-400">
-                  <span>DELIVERY</span>
+                  <span>
+                    DELIVERY
+                    {fields.district && (
+                      <span className="text-neutral-500"> ({fields.district === "Dhaka" ? "Inside Dhaka" : "Outside Dhaka"})</span>
+                    )}
+                  </span>
                   <span className="text-white font-bold">
                     {shipping === null ? "Select district" : shipping === 0 ? "FREE" : formatPrice(shipping)}
                   </span>

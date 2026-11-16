@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SHIPPING_RATES } from "@/lib/shipping";
 
 export const metadata: Metadata = {
   title: "Shipping Information",
@@ -29,10 +30,8 @@ export default function ShippingPage() {
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {[
-                    { area: "Inside Dhaka", charge: "Free on orders ৳1500+, else ৳70", time: "1–2 business days" },
-                    { area: "Outside Dhaka", charge: "৳120", time: "3–5 business days" },
-                    { area: "Chittagong", charge: "৳120", time: "3–4 business days" },
-                    { area: "Other Districts", charge: "৳150", time: "4–7 business days" },
+                    { area: "Inside Dhaka", charge: `৳${SHIPPING_RATES.dhaka}`, time: "1–2 business days" },
+                    { area: "Outside Dhaka (all other districts)", charge: `৳${SHIPPING_RATES.outsideDhaka}`, time: "3–5 business days" },
                   ].map((row) => (
                     <tr key={row.area} className="hover:bg-neutral-50/50">
                       <td className="px-5 py-3.5 font-medium text-neutral-900">{row.area}</td>

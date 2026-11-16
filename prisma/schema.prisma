@@ -157,6 +157,14 @@ model Order {
 
   // Staff fields
   trackingNumber   String?
+
+  // Courier (Steadfast) consignment created from the admin panel
+  courierProvider     String?
+  courierConsignmentId String?
+  courierTrackingCode String?
+  courierStatus       String?
+  courierSentAt       DateTime?
+
   idempotencyKey   String?       @unique
   // JSON array of flag strings, e.g. ["repeat_phone_24h"]
   flags            Json          @default("[]")
@@ -199,6 +207,46 @@ model OrderItem {
   @@index([productId])
   @@map("order_items")
 }
+
+// ─────────────────────────────────────────────
+// COURIER SETTINGS (single row per provider, e.g. "steadfast")
+// Secrets are stored AES-256-GCM encrypted (see lib/courier/crypto.ts).
+// ─────────────────────────────────────────────
+
+model CourierSettings {
+  id             String   @id // provider key, e.g. "steadfast"
+  email          String?
+  passwordEnc    String?
+  apiKeyEnc      String?
+  secretKeyEnc   String?
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("courier_settings")
+}
+
+// ─────────────────────────────────────────────
+// MARKETING & SEO SETTINGS
+// ─────────────────────────────────────────────
+
+model MarketingSettings {
+  id                         String   @id @default("default")
+  gtmId                      String?  // Google Tag Manager ID (GTM-XXXXXX)
+  ga4Id                      String?  // GA4 Measurement ID (G-XXXXXX)
+  metaPixelId                String?  // Meta Pixel ID
+  metaCapiTokenEnc           String?  // Meta CAPI Access Token (Encrypted)
+  metaTestEventCode          String?  // Meta Test Event Code (e.g. TEST12345)
+  googleSiteVerification     String?  // Google Search Console meta tag content
+  facebookDomainVerification String?  // Meta Domain Verification meta tag content
+  purchaseEventTrigger       String   @default("ORDER_PLACED") // "ORDER_PLACED" | "ORDER_DELIVERED"
+  enableAdvancedMatching     Boolean  @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@map("marketing_settings")
+}
+
 
 // ─────────────────────────────────────────────
 // COUPONS

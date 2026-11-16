@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AdminOrder, OrderStatus } from "@/lib/orders/types";
 import { ORDER_STATUSES, STATUS_LABELS, STATUS_COLORS } from "@/lib/orders/types";
-import { ArrowLeft, Package } from "lucide-react";
+import { ArrowLeft, Package, Truck } from "lucide-react";
 
 const inputClass = "w-full bg-black/40 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-white/50";
 
@@ -18,6 +19,25 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [sendingCourier, setSendingCourier] = useState(false);
+  const [courierError, setCourierError] = useState("");
+
+  async function sendToSteadfast() {
+    setSendingCourier(true);
+    setCourierError("");
+    const res = await fetch("/api/admin/courier/steadfast/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: order.id }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string; order?: AdminOrder };
+    setSendingCourier(false);
+    if (data.order) {
+      setOrder(data.order);
+      if (data.order.trackingNumber) setTrackingNumber(data.order.trackingNumber);
+    }
+    if (!res.ok) setCourierError(data.error ?? "Could not send to Steadfast.");
+  }
 
   async function save() {
     setSaving(true);
@@ -204,6 +224,54 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
             >
               {saving ? "Saving…" : "Update order"}
             </button>
+          </section>
+
+          {/* Steadfast courier */}
+          <section className="bg-admin-card border border-admin-border p-5 space-y-3">
+            <h2 className="text-white font-semibold text-sm uppercase tracking-wider flex items-center gap-2">
+              <Truck className="w-4 h-4" /> Steadfast courier
+            </h2>
+            {order.courier ? (
+              <div className="space-y-2 text-sm">
+                <p className="text-emerald-400 font-semibold">✓ Consignment created</p>
+                <div className="grid grid-cols-2 gap-y-2">
+                  <span className="text-neutral-500">Consignment ID</span>
+                  <span className="text-white font-mono font-bold text-base">{order.courier.consignmentId}</span>
+                  {order.courier.trackingCode && (
+                    <>
+                      <span className="text-neutral-500">Tracking code</span>
+                      <span className="text-white font-mono">{order.courier.trackingCode}</span>
+                    </>
+                  )}
+                  <span className="text-neutral-500">Status</span>
+                  <span className="text-white capitalize">{order.courier.status.replace(/_/g, " ")}</span>
+                  <span className="text-neutral-500">COD to collect</span>
+                  <span className="text-white">৳{(order.paymentStatus === "PAID" ? 0 : order.total).toLocaleString()}</span>
+                </div>
+                <p className="text-xs text-neutral-500 pt-1">
+                  Write the consignment ID on the parcel — Steadfast will pick it up from your shop.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-neutral-500">
+                  Creates the parcel consignment in your Steadfast account (COD ৳
+                  {(order.paymentStatus === "PAID" ? 0 : order.total).toLocaleString()}).
+                </p>
+                {courierError && <p className="text-red-400 text-sm">{courierError}</p>}
+                {courierError?.includes("Settings") && (
+                  <Link href="/admin/settings" className="text-xs text-white underline">Open courier settings →</Link>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void sendToSteadfast()}
+                  disabled={sendingCourier || order.status === "CANCELLED" || order.status === "DELIVERED"}
+                  className="w-full bg-emerald-500 text-black py-3 text-xs font-bold tracking-[0.18em] uppercase disabled:opacity-50"
+                >
+                  {sendingCourier ? "Sending…" : "Send request to Steadfast"}
+                </button>
+              </>
+            )}
           </section>
 
           <section className="bg-admin-card border border-admin-border p-5 space-y-2">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle, Package, Truck, Phone } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { analytics } from "@/lib/analytics";
 
 type LastOrder = {
   orderNumber: string;
@@ -25,7 +26,26 @@ export default function OrderSuccessClient() {
       const raw = window.sessionStorage.getItem("riser:last-order");
       if (!raw) return;
       const parsed = JSON.parse(raw) as LastOrder;
-      if (parsed.orderNumber === orderNumber) setSummary(parsed);
+      if (parsed.orderNumber === orderNumber) {
+        setSummary(parsed);
+
+        // Deduplicated browser Purchase tracking with matching eventId: pur-${orderNumber}
+        const trackingKey = `riser:tracked-purchase:${orderNumber}`;
+        if (!window.sessionStorage.getItem(trackingKey)) {
+          window.sessionStorage.setItem(trackingKey, "1");
+          analytics.purchase({
+            orderId: orderNumber,
+            orderNumber,
+            totalValue: parsed.total ?? 0,
+            items: parsed.items?.map((it) => ({
+              id: it.name,
+              name: it.name,
+              price: it.price,
+              quantity: it.qty,
+            })),
+          });
+        }
+      }
     } catch {
       /* no summary available — order number is enough */
     }

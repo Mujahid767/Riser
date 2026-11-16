@@ -3,7 +3,7 @@
 
 export const SHIPPING_RATES = {
   /** Orders delivered inside Dhaka */
-  dhaka: 60,
+  dhaka: 70,
   /** Orders delivered anywhere else in Bangladesh */
   outsideDhaka: 120,
   /** Free delivery when subtotal reaches this amount. `null` = never free. */
@@ -28,6 +28,30 @@ export const DISTRICTS = [
 ] as const;
 
 export type District = (typeof DISTRICTS)[number];
+
+/** Older / common English spellings, shown next to the official name so nobody can't find their district. */
+const DISTRICT_ALIASES: Record<string, string> = {
+  Chattogram: "Chittagong",
+  Cumilla: "Comilla",
+  Bogura: "Bogra",
+  Barishal: "Barisal",
+  Jashore: "Jessore",
+  Chapainawabganj: "Nawabganj",
+  Jhalokati: "Jhalakathi",
+  Moulvibazar: "Maulvibazar",
+  Netrokona: "Netrakona",
+  Khagrachhari: "Khagrachari",
+  Narsingdi: "Narsinghdi",
+  Gopalganj: "Gopalgonj",
+  Habiganj: "Hobiganj",
+  Kishoreganj: "Kishorganj",
+};
+
+/** Label for the district dropdown, e.g. "Chattogram (Chittagong)". */
+export function districtLabel(d: string): string {
+  const alias = DISTRICT_ALIASES[d];
+  return alias && alias !== d ? `${d} (${alias})` : d;
+}
 
 export function calculateShipping(district: string, subtotal: number): number {
   if (SHIPPING_RATES.freeOver !== null && subtotal >= SHIPPING_RATES.freeOver) return 0;
