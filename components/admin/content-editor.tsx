@@ -6,6 +6,7 @@ import ImagePicker from "@/components/admin/image-picker";
 
 const SECTIONS = [
   ["announcement", "Top bar"],
+  ["contact", "Contact & Social"],
   ["hero", "Hero slides"],
   ["categories", "Categories"],
   ["drops", "New & best"],
@@ -134,6 +135,73 @@ export default function ContentEditor({ initial }: { initial: SiteContent }) {
                   setContent({ ...content, announcement: { ...content.announcement, rightNote } })
                 }
               />
+            </>
+          )}
+
+          {section === "contact" && (
+            <>
+              <div className="bg-brand-500/10 border border-brand-500/20 p-4 text-xs text-brand-300">
+                These contact and social media details automatically power the site header, footer, contact page, and floating WhatsApp chat button.
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field
+                  label="Customer Care Phone"
+                  value={content.contact?.phone ?? ""}
+                  onChange={(phone) => setContent({ ...content, contact: { ...content.contact, phone } })}
+                />
+                <Field
+                  label="WhatsApp Business Number"
+                  value={content.contact?.whatsapp ?? ""}
+                  onChange={(whatsapp) => setContent({ ...content, contact: { ...content.contact, whatsapp } })}
+                />
+              </div>
+              <Field
+                label="WhatsApp Default Greeting Message"
+                value={content.contact?.whatsappMessage ?? ""}
+                onChange={(whatsappMessage) => setContent({ ...content, contact: { ...content.contact, whatsappMessage } })}
+              />
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field
+                  label="Official Email (or Gmail)"
+                  value={content.contact?.email ?? ""}
+                  onChange={(email) => setContent({ ...content, contact: { ...content.contact, email } })}
+                />
+                <Field
+                  label="Business Hours"
+                  value={content.contact?.businessHours ?? ""}
+                  onChange={(businessHours) => setContent({ ...content, contact: { ...content.contact, businessHours } })}
+                />
+              </div>
+              <Field
+                label="Boutique / Head Office Address"
+                value={content.contact?.address ?? ""}
+                onChange={(address) => setContent({ ...content, contact: { ...content.contact, address } })}
+              />
+              <div className="pt-2 border-t border-white/10 space-y-4">
+                <p className="text-xs font-mono uppercase tracking-wider text-white">Social Media Links</p>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <Field
+                    label="Facebook Page URL"
+                    value={content.contact?.facebook ?? ""}
+                    onChange={(facebook) => setContent({ ...content, contact: { ...content.contact, facebook } })}
+                  />
+                  <Field
+                    label="Instagram Profile URL"
+                    value={content.contact?.instagram ?? ""}
+                    onChange={(instagram) => setContent({ ...content, contact: { ...content.contact, instagram } })}
+                  />
+                  <Field
+                    label="YouTube Channel (Optional)"
+                    value={content.contact?.youtube ?? ""}
+                    onChange={(youtube) => setContent({ ...content, contact: { ...content.contact, youtube } })}
+                  />
+                  <Field
+                    label="TikTok Profile (Optional)"
+                    value={content.contact?.tiktok ?? ""}
+                    onChange={(tiktok) => setContent({ ...content, contact: { ...content.contact, tiktok } })}
+                  />
+                </div>
+              </div>
             </>
           )}
 

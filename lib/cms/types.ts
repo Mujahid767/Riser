@@ -29,12 +29,26 @@ export type TrustItem = {
   desc: string;
 };
 
+export type ContactInfo = {
+  phone: string;
+  whatsapp: string;
+  email: string;
+  address: string;
+  businessHours: string;
+  facebook: string;
+  instagram: string;
+  youtube?: string;
+  tiktok?: string;
+  whatsappMessage: string;
+};
+
 export type SiteContent = {
   announcement: {
     badge: string;
     items: string[];
     rightNote: string;
   };
+  contact: ContactInfo;
   hero: HeroSlide[];
   categories: {
     eyebrow: string;

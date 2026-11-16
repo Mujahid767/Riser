@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Phone, Mail, MapPin, ArrowRight } from "lucide-react";
+import { Phone, Mail, MapPin, ArrowRight, MessageCircle } from "lucide-react";
+import type { SiteContent } from "@/lib/cms/types";
 
 const footerLinks = {
   collections: [
@@ -31,7 +32,21 @@ const footerLinks = {
   ],
 };
 
-export default function Footer() {
+export default function Footer({
+  content,
+}: {
+  content?: SiteContent;
+} = {}) {
+  const phone = content?.contact?.phone || content?.footer.phone || "01577049566";
+  const whatsapp = content?.contact?.whatsapp || "01577049566";
+  const email = content?.contact?.email || content?.footer.email || "atelier@riser.com.bd";
+  const address = content?.contact?.address || content?.footer.address || "Gulshan 2 • Banani • Dhanmondi, Dhaka";
+  const brandBlurb = content?.footer?.brandBlurb || "Haute couture and luxury garments for girls and women. Redefining heirloom baby frocks, statement Nayra cuts with twirl skirts, tailored two-piece sets, imperial three-piece suits, and architectural short tops.";
+  const fb = content?.contact?.facebook || "https://facebook.com/riser.atelier";
+  const insta = content?.contact?.instagram || "https://instagram.com/riser.atelier";
+  const waDigits = whatsapp.replace(/\D/g, "");
+  const waUrl = `https://wa.me/${waDigits.startsWith("88") ? waDigits : `88${waDigits}`}?text=${encodeURIComponent(content?.contact?.whatsappMessage || "Hello Riser Atelier, I have an inquiry.")}`;
+
   return (
     <footer className="bg-[#040406] text-neutral-400 border-t border-white/10 select-none">
       {/* VIP Access Marquee & Newsletter */}
@@ -40,13 +55,13 @@ export default function Footer() {
           <div className="grid lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-6">
               <span className="text-[10px] font-mono tracking-[0.35em] uppercase text-brand-500 font-bold mb-2 block">
-                [ THE INSIDERS CIRCLE ]
+                {content?.footer.newsletterEyebrow || "[ THE INSIDERS CIRCLE ]"}
               </span>
               <h3 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-[0.05em] font-sans">
-                JOIN THE ATELIER REGISTRY
+                {content?.footer.newsletterTitle || "JOIN THE ATELIER REGISTRY"}
               </h3>
               <p className="mt-2 text-xs sm:text-sm text-neutral-400 max-w-md font-light">
-                Receive priority private links 24 hours prior to public drops, private salon invitations, and bespoke tailoring access.
+                {content?.footer.newsletterBody || "Receive priority private links 24 hours prior to public drops, private salon invitations, and bespoke tailoring access."}
               </p>
             </div>
 
@@ -86,24 +101,49 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-xs text-neutral-400 font-light leading-relaxed max-w-sm mt-3">
-              Haute couture and luxury garments for girls and women. Redefining heirloom baby frocks,
-              statement Nayra cuts with twirl skirts, tailored two-piece sets, imperial three-piece suits,
-              and architectural short tops.
+              {brandBlurb}
             </p>
 
             <div className="mt-8 space-y-3 text-xs font-mono">
               <div className="flex items-center gap-3 text-neutral-300">
                 <MapPin className="w-4 h-4 text-brand-500 shrink-0" />
-                <span>Gulshan 2 &bull; Banani &bull; Dhanmondi, Dhaka</span>
+                <span>{address}</span>
               </div>
               <div className="flex items-center gap-3 text-neutral-300">
                 <Phone className="w-4 h-4 text-brand-500 shrink-0" />
-                <span>Client Concierge: 01XXXXXXXXX</span>
+                <a href={`tel:${phone.replace(/\s+/g, "")}`} className="hover:text-white transition-colors">
+                  {phone.startsWith("Client") ? phone : `Client Concierge: ${phone}`}
+                </a>
+              </div>
+              <div className="flex items-center gap-3 text-neutral-300">
+                <MessageCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <a href={waUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition-colors">
+                  WhatsApp: {whatsapp}
+                </a>
               </div>
               <div className="flex items-center gap-3 text-neutral-300">
                 <Mail className="w-4 h-4 text-brand-500 shrink-0" />
-                <span>atelier@riser.com.bd</span>
+                <a href={`mailto:${email}`} className="hover:text-white transition-colors">
+                  {email}
+                </a>
               </div>
+            </div>
+
+            {/* Social Links */}
+            <div className="mt-6 flex items-center gap-4 text-xs font-mono">
+              {fb && (
+                <a href={fb} target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-white transition-colors uppercase">
+                  Facebook
+                </a>
+              )}
+              {insta && (
+                <a href={insta} target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-white transition-colors uppercase">
+                  Instagram
+                </a>
+              )}
+              <a href={waUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition-colors uppercase">
+                WhatsApp
+              </a>
             </div>
           </div>
 

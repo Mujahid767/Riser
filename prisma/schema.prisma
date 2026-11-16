@@ -209,6 +209,18 @@ model OrderItem {
 }
 
 // ─────────────────────────────────────────────
+// CMS & DYNAMIC SITE CONTENT
+// ─────────────────────────────────────────────
+
+model CmsContent {
+  id        String   @id @default("site_content")
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@map("cms_content")
+}
+
+// ─────────────────────────────────────────────
 // COURIER SETTINGS (single row per provider, e.g. "steadfast")
 // Secrets are stored AES-256-GCM encrypted (see lib/courier/crypto.ts).
 // ─────────────────────────────────────────────

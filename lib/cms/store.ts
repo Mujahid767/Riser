@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import path from "path";
+import prisma from "@/lib/db";
 import { defaultSiteContent } from "./defaults";
 import { sanitizeContent } from "./sanitize";
 import type { CmsStore, MediaItem, SiteContent } from "./types";
@@ -51,6 +52,15 @@ async function writeStore(store: CmsStore) {
 }
 
 export const getSiteContent = cache(async (): Promise<SiteContent> => {
+  try {
+    const row = await prisma.cmsContent.findUnique({ where: { id: "site_content" } });
+    if (row && row.data && typeof row.data === "object") {
+      return sanitizeContent(row.data);
+    }
+  } catch {
+    // Database offline or during migration fallback
+  }
+
   const store = await readStore();
   return store.content;
 });
@@ -62,10 +72,29 @@ export async function listMedia(): Promise<MediaItem[]> {
 
 export async function saveSiteContent(input: unknown): Promise<SiteContent> {
   return withLock(async () => {
-    const store = await readStore();
-    store.content = sanitizeContent(input);
-    await writeStore(store);
-    return store.content;
+    const sanitized = sanitizeContent(input);
+
+    // 1. Persist to PostgreSQL database (survives all cloud deployments)
+    try {
+      await prisma.cmsContent.upsert({
+        where: { id: "site_content" },
+        create: { id: "site_content", data: sanitized as never },
+        update: { data: sanitized as never },
+      });
+    } catch (e) {
+      console.error("[cms] failed to save to database", e);
+    }
+
+    // 2. Also persist to local file store
+    try {
+      const store = await readStore();
+      store.content = sanitized;
+      await writeStore(store);
+    } catch {
+      // Ephemeral disk in serverless
+    }
+
+    return sanitized;
   });
 }
 

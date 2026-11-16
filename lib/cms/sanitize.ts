@@ -120,6 +120,18 @@ export function sanitizeContent(input: unknown): SiteContent {
         .map((item, index) => text(item, base.announcement.items[index] ?? "RISER", 40)),
       rightNote: text(source.announcement?.rightNote, base.announcement.rightNote, 80),
     },
+    contact: {
+      phone: text(source.contact?.phone, base.contact.phone, 30),
+      whatsapp: text(source.contact?.whatsapp, base.contact.whatsapp, 30),
+      email: text(source.contact?.email, base.contact.email, 100),
+      address: text(source.contact?.address, base.contact.address, 200),
+      businessHours: text(source.contact?.businessHours, base.contact.businessHours, 100),
+      facebook: href(source.contact?.facebook, base.contact.facebook),
+      instagram: href(source.contact?.instagram, base.contact.instagram),
+      youtube: optionalText(source.contact?.youtube, base.contact.youtube ?? "", 200),
+      tiktok: optionalText(source.contact?.tiktok, base.contact.tiktok ?? "", 200),
+      whatsappMessage: text(source.contact?.whatsappMessage, base.contact.whatsappMessage, 300),
+    },
     hero: hero.length ? hero : base.hero,
     categories: {
       eyebrow: text(source.categories?.eyebrow, base.categories.eyebrow, 80),

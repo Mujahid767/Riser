@@ -6,6 +6,18 @@ export const defaultSiteContent: SiteContent = {
     items: ["NAYRA CUT & SKIRT", "ROYAL BABY FROCKS", "TWO & THREE PIECE", "SHORT TOPS"],
     rightNote: "DHAKA & NATIONWIDE DISPATCH",
   },
+  contact: {
+    phone: "01577049566",
+    whatsapp: "01577049566",
+    email: "atelier@riser.com.bd",
+    address: "Gulshan 2 • Banani • Dhanmondi, Dhaka",
+    businessHours: "Sat–Thu, 10am–8pm",
+    facebook: "https://facebook.com/riser.atelier",
+    instagram: "https://instagram.com/riser.atelier",
+    youtube: "",
+    tiktok: "",
+    whatsappMessage: "Hello Riser Atelier, I have an inquiry about an order / dress.",
+  },
   hero: [
     {
       id: "slide-nayra",

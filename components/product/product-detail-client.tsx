@@ -15,6 +15,7 @@ import {
   Sparkles,
   Scissors,
   Check,
+  MessageCircle,
 } from "lucide-react";
 import { cn, formatPrice, calculateDiscount } from "@/lib/utils";
 import { addToCart } from "@/lib/cart/cart-store";
@@ -428,6 +429,18 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                     BUY NOW &bull; CASH ON DELIVERY
                   </button>
                 )}
+
+                <a
+                  href={`https://wa.me/8801577049566?text=${encodeURIComponent(
+                    `Hello Riser Atelier, I want to inquire about "${product.name}" (Price: ৳${activePrice}${selectedSize ? `, Size: ${selectedSize}` : ""}).`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 py-3 text-xs font-mono uppercase tracking-wider transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-400" />
+                  Order / Inquire on WhatsApp
+                </a>
               </div>
 
               {/* Atelier Pillars */}
