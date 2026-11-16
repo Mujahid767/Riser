@@ -23,6 +23,7 @@ import { MAX_QTY_PER_LINE, SHIPPING_RATES } from "@/lib/shipping";
 import type { StoreProduct } from "@/lib/catalog";
 import { getPriceForSize } from "@/lib/products/types";
 import ProductCard from "@/components/product/product-card";
+import MeasurementChart from "@/components/product/measurement-chart";
 import ReviewSection from "@/components/product/review-section";
 import { useWishlist } from "@/lib/wishlist/wishlist-store";
 
@@ -204,6 +205,9 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                 ))}
               </div>
             )}
+
+            {/* Age → length measurements for this product's sizes */}
+            <MeasurementChart sizes={product.sizes} />
           </div>
 
           {/* Right Column: Editorial Details */}

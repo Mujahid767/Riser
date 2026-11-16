@@ -57,7 +57,7 @@ export const DEPARTMENTS: { value: AdminProduct["department"]; label: string }[]
   { value: "women", label: "Maison Femme (Women)" },
 ];
 
-export const KIDS_SIZES = ["16-20", "22-26", "28-32", "34-38", "0-6M", "6-12M", "1-2Y", "2-3Y", "3-4Y", "4-5Y", "5-6Y", "6-7Y", "7-8Y", "8-10Y", "10-12Y"];
+export const KIDS_SIZES = ["16", "18", "20", "22", "24", "26", "28", "30", "32", "34", "36", "38", "16-20", "22-26", "28-32", "34-38", "0-6M", "6-12M", "1-2Y", "2-3Y", "3-4Y", "4-5Y", "5-6Y", "6-7Y", "7-8Y", "8-10Y", "10-12Y"];
 export const WOMEN_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "34-38", "40-44"];
 
 /** Resolve effective unit price for a given size (falls back to base price). */
