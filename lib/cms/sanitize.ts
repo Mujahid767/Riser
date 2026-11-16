@@ -1,5 +1,5 @@
 import { defaultSiteContent } from "./defaults";
-import type { CategoryCard, HeroSlide, SiteContent, TrustItem } from "./types";
+import type { CategoryCard, HeroSlide, OutletLocation, SiteContent, TrustItem } from "./types";
 
 const TRUST_ICONS = new Set<TrustItem["icon"]>([
   "shield",
@@ -90,6 +90,14 @@ export function sanitizeContent(input: unknown): SiteContent {
     };
   });
 
+  if (!cards.some((c) => c.slug === "baby-party-frock")) {
+    const partyFrockDefault = base.categories.cards.find((c) => c.slug === "baby-party-frock");
+    if (partyFrockDefault) {
+      const bfIdx = cards.findIndex((c) => c.slug === "baby-frock");
+      cards.splice(bfIdx >= 0 ? bfIdx + 1 : 1, 0, partyFrockDefault);
+    }
+  }
+
   const trustInput = Array.isArray(source.trust?.items) ? source.trust.items : base.trust.items;
   const trustItems: TrustItem[] = trustInput.slice(0, 8).map((item, index) => {
     const fallback = base.trust.items[index] ?? base.trust.items[0];
@@ -109,6 +117,28 @@ export function sanitizeContent(input: unknown): SiteContent {
     : base.seasonal.specs;
   const brandStats = Array.isArray(source.brand?.stats) ? source.brand.stats : base.brand.stats;
 
+  const outletsInput = Array.isArray(source.contact?.outlets) && source.contact.outlets.length > 0
+    ? source.contact.outlets
+    : base.contact.outlets;
+  const outlets: OutletLocation[] = outletsInput.slice(0, 20).map((o, index) => {
+    const fallback = base.contact.outlets[index] ?? base.contact.outlets[0];
+    const raw = (o ?? {}) as Partial<OutletLocation>;
+    return {
+      id: text(raw.id, fallback.id, 40),
+      mallEn: text(raw.mallEn, fallback.mallEn, 120),
+      mallBn: text(raw.mallBn, fallback.mallBn, 120),
+      shopEn: text(raw.shopEn, fallback.shopEn, 80),
+      shopBn: text(raw.shopBn, fallback.shopBn, 80),
+      area: text(raw.area, fallback.area, 80),
+    };
+  });
+
+  const cleanLegacy = (val: unknown, legacyValues: string[], fallback: string) => {
+    if (typeof val !== "string" || !val.trim()) return fallback;
+    if (legacyValues.includes(val.trim()) || val.includes("01XXXXXXXXX")) return fallback;
+    return val;
+  };
+
   return {
     announcement: {
       badge: text(source.announcement?.badge, base.announcement.badge, 80),
@@ -121,16 +151,38 @@ export function sanitizeContent(input: unknown): SiteContent {
       rightNote: text(source.announcement?.rightNote, base.announcement.rightNote, 80),
     },
     contact: {
-      phone: text(source.contact?.phone, base.contact.phone, 30),
+      phone: text(
+        cleanLegacy(source.contact?.phone, ["01577049566"], base.contact.phone),
+        base.contact.phone,
+        30
+      ),
       whatsapp: text(source.contact?.whatsapp, base.contact.whatsapp, 30),
-      email: text(source.contact?.email, base.contact.email, 100),
-      address: text(source.contact?.address, base.contact.address, 200),
-      businessHours: text(source.contact?.businessHours, base.contact.businessHours, 100),
-      facebook: href(source.contact?.facebook, base.contact.facebook),
+      email: text(
+        cleanLegacy(source.contact?.email, ["atelier@riser.com.bd", "hello@riser.com.bd"], base.contact.email),
+        base.contact.email,
+        100
+      ),
+      address: text(
+        cleanLegacy(source.contact?.address, ["Gulshan 2 • Banani • Dhanmondi, Dhaka"], base.contact.address),
+        base.contact.address,
+        200
+      ),
+      factoryAddress: text(source.contact?.factoryAddress, base.contact.factoryAddress, 200),
+      factoryAddressBn: text(source.contact?.factoryAddressBn, base.contact.factoryAddressBn, 200),
+      businessHours: text(
+        cleanLegacy(source.contact?.businessHours, ["Sat–Thu, 10am–8pm"], base.contact.businessHours),
+        base.contact.businessHours,
+        120
+      ),
+      facebook: href(
+        cleanLegacy(source.contact?.facebook, ["https://facebook.com/riser.atelier"], base.contact.facebook),
+        base.contact.facebook
+      ),
       instagram: href(source.contact?.instagram, base.contact.instagram),
       youtube: optionalText(source.contact?.youtube, base.contact.youtube ?? "", 200),
       tiktok: optionalText(source.contact?.tiktok, base.contact.tiktok ?? "", 200),
       whatsappMessage: text(source.contact?.whatsappMessage, base.contact.whatsappMessage, 300),
+      outlets,
     },
     hero: hero.length ? hero : base.hero,
     categories: {
@@ -207,9 +259,21 @@ export function sanitizeContent(input: unknown): SiteContent {
       newsletterTitle: text(source.footer?.newsletterTitle, base.footer.newsletterTitle, 80),
       newsletterBody: text(source.footer?.newsletterBody, base.footer.newsletterBody, 300),
       brandBlurb: text(source.footer?.brandBlurb, base.footer.brandBlurb, 500),
-      address: text(source.footer?.address, base.footer.address, 160),
-      phone: text(source.footer?.phone, base.footer.phone, 80),
-      email: text(source.footer?.email, base.footer.email, 80),
+      address: text(
+        cleanLegacy(source.footer?.address, ["Gulshan 2 • Banani • Dhanmondi, Dhaka"], base.footer.address),
+        base.footer.address,
+        160
+      ),
+      phone: text(
+        cleanLegacy(source.footer?.phone, ["Client Concierge: 01XXXXXXXXX"], base.footer.phone),
+        base.footer.phone,
+        80
+      ),
+      email: text(
+        cleanLegacy(source.footer?.email, ["atelier@riser.com.bd"], base.footer.email),
+        base.footer.email,
+        80
+      ),
     },
   };
 }

@@ -1,13 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Phone, Mail, MapPin, ArrowRight, MessageCircle } from "lucide-react";
+import { Phone, Mail, MapPin, MessageCircle, Factory, Building2 } from "lucide-react";
 import type { SiteContent } from "@/lib/cms/types";
 
 const footerLinks = {
   collections: [
     { label: "Nayra Dress with Skirt", href: "/shop?category=nayra-dress-skirt" },
-    { label: "Baby Frocks (0-5Y)", href: "/shop?category=baby-frock" },
+    { label: "Baby Frocks (1-12Y)", href: "/shop?category=baby-frock" },
+    { label: "Baby Party Frock (1-12Y)", href: "/shop?category=baby-party-frock" },
     { label: "Kids Two-Piece Sets", href: "/shop?category=two-piece-kids" },
     { label: "Kids Three-Piece Sets", href: "/shop?category=three-piece-kids" },
     { label: "Adult Girls One-Piece", href: "/shop?category=adult-one-piece" },
@@ -37,15 +39,23 @@ export default function Footer({
 }: {
   content?: SiteContent;
 } = {}) {
-  const phone = content?.contact?.phone || content?.footer.phone || "01577049566";
+  const [subEmail, setSubEmail] = useState("");
+  const [subscribed, setSubscribed] = useState(false);
+
+  const phone = content?.contact?.phone || content?.footer.phone || "+880 1577-049566";
   const whatsapp = content?.contact?.whatsapp || "01577049566";
-  const email = content?.contact?.email || content?.footer.email || "atelier@riser.com.bd";
-  const address = content?.contact?.address || content?.footer.address || "Gulshan 2 • Banani • Dhanmondi, Dhaka";
-  const brandBlurb = content?.footer?.brandBlurb || "Haute couture and luxury garments for girls and women. Redefining heirloom baby frocks, statement Nayra cuts with twirl skirts, tailored two-piece sets, imperial three-piece suits, and architectural short tops.";
-  const fb = content?.contact?.facebook || "https://facebook.com/riser.atelier";
+  const email = content?.contact?.email || content?.footer.email || "riserclothingshop@gmail.com";
+  const factoryEn = content?.contact?.factoryAddress || "Mahmudpur, Signboard, Narayanganj, Bangladesh";
+  const outlets = content?.contact?.outlets ?? [];
+  const brandBlurb =
+    content?.footer?.brandBlurb ||
+    "100% in-house garments manufacturer & luxury clothing house established in 1998. Produced at our own factory in Mahmudpur, Signboard, Narayanganj with 7 retail outlets across Dhaka — serving retail & international buyers worldwide.";
+  const fb = content?.contact?.facebook || "https://www.facebook.com/profile.php?id=61571749063384";
   const insta = content?.contact?.instagram || "https://instagram.com/riser.atelier";
   const waDigits = whatsapp.replace(/\D/g, "");
-  const waUrl = `https://wa.me/${waDigits.startsWith("88") ? waDigits : `88${waDigits}`}?text=${encodeURIComponent(content?.contact?.whatsappMessage || "Hello Riser Atelier, I have an inquiry.")}`;
+  const waUrl = `https://wa.me/${waDigits.startsWith("88") ? waDigits : `88${waDigits}`}?text=${encodeURIComponent(
+    content?.contact?.whatsappMessage || "Hello Riser, I have an inquiry."
+  )}`;
 
   return (
     <footer className="bg-[#040406] text-neutral-400 border-t border-white/10 select-none">
@@ -66,22 +76,34 @@ export default function Footer({
             </div>
 
             <div className="lg:col-span-6">
-              <form
-                onSubmit={(e) => e.preventDefault()}
-                className="flex flex-col sm:flex-row gap-3 max-w-md lg:ml-auto"
-              >
-                <input
-                  type="email"
-                  placeholder="ENTER CLIENT EMAIL"
-                  className="bg-black/60 border border-white/20 px-4 py-3 text-xs font-mono tracking-widest text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors flex-1"
-                />
-                <button
-                  type="submit"
-                  className="btn-luxury-white text-xs px-6 py-3 whitespace-nowrap"
+              {subscribed ? (
+                <p className="text-xs font-mono uppercase tracking-widest text-emerald-400 lg:text-right">
+                  ✓ Thank you — you are on the Riser priority list.
+                </p>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (subEmail.trim()) setSubscribed(true);
+                  }}
+                  className="flex flex-col sm:flex-row gap-3 max-w-md lg:ml-auto"
                 >
-                  SUBSCRIBE
-                </button>
-              </form>
+                  <input
+                    type="email"
+                    required
+                    value={subEmail}
+                    onChange={(e) => setSubEmail(e.target.value)}
+                    placeholder="ENTER CLIENT EMAIL"
+                    className="bg-black/60 border border-white/20 px-4 py-3 text-xs font-mono tracking-widest text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors flex-1"
+                  />
+                  <button
+                    type="submit"
+                    className="btn-luxury-white text-xs px-6 py-3 whitespace-nowrap"
+                  >
+                    SUBSCRIBE
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
@@ -105,20 +127,26 @@ export default function Footer({
             </p>
 
             <div className="mt-8 space-y-3 text-xs font-mono">
-              <div className="flex items-center gap-3 text-neutral-300">
-                <MapPin className="w-4 h-4 text-brand-500 shrink-0" />
-                <span>{address}</span>
+              <div className="flex items-start gap-3 text-neutral-300">
+                <Factory className="w-4 h-4 text-brand-500 shrink-0 mt-0.5" />
+                <span>Own Garments Factory: {factoryEn}</span>
+              </div>
+              <div className="flex items-start gap-3 text-neutral-300">
+                <Building2 className="w-4 h-4 text-brand-500 shrink-0 mt-0.5" />
+                <Link href="/about#outlets" className="hover:text-white transition-colors">
+                  {outlets.length || 7} Retail Outlets in Dhaka (Eastern Plus, Gazi Bhaban, Twin Tower, Fortune, City Heart, Eastern Plaza, New Rajdhani) &rarr;
+                </Link>
               </div>
               <div className="flex items-center gap-3 text-neutral-300">
                 <Phone className="w-4 h-4 text-brand-500 shrink-0" />
-                <a href={`tel:${phone.replace(/\s+/g, "")}`} className="hover:text-white transition-colors">
-                  {phone.startsWith("Client") ? phone : `Client Concierge: ${phone}`}
+                <a href={`tel:${phone.replace(/[\s-]/g, "")}`} className="hover:text-white transition-colors">
+                  {phone.startsWith("Client") ? phone : `Hotline / WhatsApp: ${phone}`}
                 </a>
               </div>
               <div className="flex items-center gap-3 text-neutral-300">
                 <MessageCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                 <a href={waUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition-colors">
-                  WhatsApp: {whatsapp}
+                  Direct WhatsApp Chat ({phone})
                 </a>
               </div>
               <div className="flex items-center gap-3 text-neutral-300">

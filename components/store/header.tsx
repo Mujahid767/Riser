@@ -39,7 +39,8 @@ const NAV_LINKS = [
       {
         title: "PETITE ATELIER (KIDS)",
         links: [
-          { label: "Baby Frocks (0-5Y)", href: "/shop?category=baby-frock" },
+          { label: "Baby Frocks (1-12Y)", href: "/shop?category=baby-frock" },
+          { label: "Baby Party Frock (1-12Y)", href: "/shop?category=baby-party-frock" },
           { label: "Kids Two-Piece Sets", href: "/shop?category=two-piece-kids" },
           { label: "Kids Three-Piece Sets", href: "/shop?category=three-piece-kids" },
           { label: "Petite Nayra with Skirt", href: "/shop?category=nayra-dress-skirt" },
@@ -167,7 +168,7 @@ export default function Header({
 
             {/* Logo: D'YAVOL X Architectural Style */}
             <Link href="/" className="flex flex-col items-start group select-none py-1">
-              <span className="font-sans text-2xl sm:text-3xl font-black text-white tracking-[0.3em] leading-none transition-colors group-hover:text-brand-500">
+              <span className="font-sans text-2xl sm:text-3xl font-black text-brand-500 lg:text-white tracking-[0.3em] leading-none transition-colors lg:group-hover:text-brand-500">
                 RISER
               </span>
               <span className="text-[7.5px] sm:text-[8px] text-neutral-400 tracking-[0.45em] uppercase font-mono mt-1 font-semibold group-hover:text-neutral-200 transition-colors">
@@ -414,7 +415,17 @@ export default function Header({
                         className="text-neutral-300 hover:text-white flex items-center justify-between py-1"
                       >
                         <span>Baby Frocks</span>
-                        <span className="text-[9px] text-neutral-500">0-5Y</span>
+                        <span className="text-[9px] text-neutral-500">1-12Y</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        href="/shop?category=baby-party-frock"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="text-neutral-300 hover:text-white flex items-center justify-between py-1"
+                      >
+                        <span>Baby Party Frock</span>
+                        <span className="text-[9px] text-neutral-500">1-12Y</span>
                       </Link>
                     </li>
                     <li>

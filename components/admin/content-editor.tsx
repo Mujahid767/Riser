@@ -173,10 +173,22 @@ export default function ContentEditor({ initial }: { initial: SiteContent }) {
                 />
               </div>
               <Field
-                label="Boutique / Head Office Address"
+                label="Summary Address Line"
                 value={content.contact?.address ?? ""}
                 onChange={(address) => setContent({ ...content, contact: { ...content.contact, address } })}
               />
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field
+                  label="Own Garments Factory Address (English)"
+                  value={content.contact?.factoryAddress ?? ""}
+                  onChange={(factoryAddress) => setContent({ ...content, contact: { ...content.contact, factoryAddress } })}
+                />
+                <Field
+                  label="Own Garments Factory Address (Bengali)"
+                  value={content.contact?.factoryAddressBn ?? ""}
+                  onChange={(factoryAddressBn) => setContent({ ...content, contact: { ...content.contact, factoryAddressBn } })}
+                />
+              </div>
               <div className="pt-2 border-t border-white/10 space-y-4">
                 <p className="text-xs font-mono uppercase tracking-wider text-white">Social Media Links</p>
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -201,6 +213,97 @@ export default function ContentEditor({ initial }: { initial: SiteContent }) {
                     onChange={(tiktok) => setContent({ ...content, contact: { ...content.contact, tiktok } })}
                   />
                 </div>
+              </div>
+              <div className="pt-4 border-t border-white/10 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-mono uppercase tracking-wider text-white">
+                    Retail Outlets ({(content.contact?.outlets ?? []).length})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const outlets = [...(content.contact?.outlets ?? [])];
+                      outlets.push({
+                        id: `outlet-${Date.now()}`,
+                        mallEn: "New Shopping Complex",
+                        mallBn: "নতুন শপিং কমপ্লেক্স",
+                        shopEn: "Shop 01 (1st Floor)",
+                        shopBn: "০১ (১ম তলা)",
+                        area: "Dhaka",
+                      });
+                      setContent({ ...content, contact: { ...content.contact, outlets } });
+                    }}
+                    className="text-xs font-mono uppercase px-3 py-1.5 border border-white/20 text-white hover:bg-white/10"
+                  >
+                    + Add Outlet
+                  </button>
+                </div>
+                {(content.contact?.outlets ?? []).map((outlet, idx) => (
+                  <div key={outlet.id || idx} className="border border-white/10 p-4 space-y-3 bg-black/20">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono text-brand-400 uppercase">Outlet #{idx + 1}</span>
+                      {(content.contact?.outlets ?? []).length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const outlets = (content.contact?.outlets ?? []).filter((_, i) => i !== idx);
+                            setContent({ ...content, contact: { ...content.contact, outlets } });
+                          }}
+                          className="text-xs text-red-400 hover:text-red-300"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <Field
+                        label="Mall Name (English)"
+                        value={outlet.mallEn}
+                        onChange={(mallEn) => {
+                          const outlets = [...(content.contact?.outlets ?? [])];
+                          outlets[idx] = { ...outlet, mallEn };
+                          setContent({ ...content, contact: { ...content.contact, outlets } });
+                        }}
+                      />
+                      <Field
+                        label="Mall Name (Bengali)"
+                        value={outlet.mallBn}
+                        onChange={(mallBn) => {
+                          const outlets = [...(content.contact?.outlets ?? [])];
+                          outlets[idx] = { ...outlet, mallBn };
+                          setContent({ ...content, contact: { ...content.contact, outlets } });
+                        }}
+                      />
+                      <Field
+                        label="Shop & Floor (English)"
+                        value={outlet.shopEn}
+                        onChange={(shopEn) => {
+                          const outlets = [...(content.contact?.outlets ?? [])];
+                          outlets[idx] = { ...outlet, shopEn };
+                          setContent({ ...content, contact: { ...content.contact, outlets } });
+                        }}
+                      />
+                      <Field
+                        label="Shop & Floor (Bengali)"
+                        value={outlet.shopBn}
+                        onChange={(shopBn) => {
+                          const outlets = [...(content.contact?.outlets ?? [])];
+                          outlets[idx] = { ...outlet, shopBn };
+                          setContent({ ...content, contact: { ...content.contact, outlets } });
+                        }}
+                      />
+                    </div>
+                    <Field
+                      label="Area / City"
+                      value={outlet.area}
+                      onChange={(area) => {
+                        const outlets = [...(content.contact?.outlets ?? [])];
+                        outlets[idx] = { ...outlet, area };
+                        setContent({ ...content, contact: { ...content.contact, outlets } });
+                      }}
+                    />
+                  </div>
+                ))}
               </div>
             </>
           )}

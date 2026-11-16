@@ -29,17 +29,29 @@ export type TrustItem = {
   desc: string;
 };
 
+export type OutletLocation = {
+  id: string;
+  mallEn: string;
+  mallBn: string;
+  shopEn: string;
+  shopBn: string;
+  area: string;
+};
+
 export type ContactInfo = {
   phone: string;
   whatsapp: string;
   email: string;
   address: string;
+  factoryAddress: string;
+  factoryAddressBn: string;
   businessHours: string;
   facebook: string;
   instagram: string;
   youtube?: string;
   tiktok?: string;
   whatsappMessage: string;
+  outlets: OutletLocation[];
 };
 
 export type SiteContent = {

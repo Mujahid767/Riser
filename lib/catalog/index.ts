@@ -126,7 +126,7 @@ export function filterByCategory(
     case "women":
       return list.filter((p) => p.department === "women");
     case "frocks":
-      return list.filter((p) => p.category === "baby-frock");
+      return list.filter((p) => p.category === "baby-frock" || p.category === "baby-party-frock");
     case "tops":
       return list.filter((p) => p.category === "short-tops");
     case "dresses":
@@ -138,7 +138,8 @@ export function filterByCategory(
       return list.filter(
         (p) =>
           p.category === "adult-three-piece" ||
-          p.category === "three-piece-kids"
+          p.category === "three-piece-kids" ||
+          p.category === "baby-party-frock"
       );
     case "cotton":
       return list.filter(

@@ -11,6 +11,7 @@ export type AdminProduct = {
   slug: string;
   category:
     | "baby-frock"
+    | "baby-party-frock"
     | "two-piece-kids"
     | "three-piece-kids"
     | "nayra-dress-skirt"
@@ -43,6 +44,7 @@ export type AdminProduct = {
 
 export const CATEGORIES: { value: AdminProduct["category"]; label: string }[] = [
   { value: "baby-frock", label: "Baby Frock" },
+  { value: "baby-party-frock", label: "Baby Party Frock" },
   { value: "two-piece-kids", label: "Two-Piece (Kids)" },
   { value: "three-piece-kids", label: "Three-Piece (Kids)" },
   { value: "nayra-dress-skirt", label: "Nayra Dress with Skirt" },

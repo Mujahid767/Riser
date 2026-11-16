@@ -12,6 +12,7 @@ const TABS = [
   { label: "ALL NEW DROPS", category: "all" },
   { label: "NAYRA & SKIRT", category: "nayra-dress-skirt" },
   { label: "BABY FROCKS", category: "baby-frock" },
+  { label: "BABY PARTY FROCK", category: "baby-party-frock" },
   { label: "THREE-PIECE SUITS", category: "three-piece-kids" },
   { label: "TWO-PIECE CO-ORDS", category: "adult-two-piece" },
   { label: "SHORT TOPS", category: "short-tops" },

@@ -24,6 +24,7 @@ export interface SeedProduct {
   sizePrices?: Record<string, number>;
   category:
     | "baby-frock"
+    | "baby-party-frock"
     | "two-piece-kids"
     | "three-piece-kids"
     | "nayra-dress-skirt"

@@ -10,6 +10,7 @@ const CATEGORIES = [
   { value: "all", label: "All Pieces" },
   { value: "nayra-dress-skirt", label: "Nayra & Skirt" },
   { value: "baby-frock", label: "Baby Frocks" },
+  { value: "baby-party-frock", label: "Baby Party Frock" },
   { value: "two-piece-kids", label: "Kids Two-Piece" },
   { value: "three-piece-kids", label: "Kids Three-Piece" },
   { value: "adult-one-piece", label: "Adult One-Piece" },
@@ -296,12 +297,12 @@ export default function ShopClient({
                 onClick={() => setSelectedCategory("baby-frock")}
                 className={cn(
                   "w-full text-left py-1.5 px-3 text-xs font-mono tracking-wider uppercase border transition-colors block",
-                  selectedCategory === "baby-frock" || selectedCategory === "two-piece-kids" || selectedCategory === "three-piece-kids"
+                  selectedCategory === "baby-frock" || selectedCategory === "baby-party-frock" || selectedCategory === "two-piece-kids" || selectedCategory === "three-piece-kids"
                     ? "bg-white/15 text-white border-white/30"
                     : "text-neutral-400 border-transparent hover:text-white"
                 )}
               >
-                Petite Atelier (0-12Y)
+                Petite Atelier (1-12Y)
               </button>
               <button
                 onClick={() => setSelectedCategory("nayra-dress-skirt")}
