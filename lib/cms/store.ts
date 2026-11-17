@@ -66,6 +66,27 @@ export const getSiteContent = cache(async (): Promise<SiteContent> => {
 });
 
 export async function listMedia(): Promise<MediaItem[]> {
+  try {
+    const rows = await prisma.mediaItem.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    if (rows.length > 0) {
+      return rows.map((r) => ({
+        id: r.id,
+        url: r.url,
+        filename: r.filename,
+        width: r.width,
+        height: r.height,
+        bytes: r.bytes,
+        createdAt: r.createdAt.toISOString(),
+        storage: (r.storage === "cloudinary" ? "cloudinary" : "local") as MediaItem["storage"],
+        publicId: r.publicId ?? undefined,
+      }));
+    }
+  } catch (e) {
+    console.error("[cms] failed to list media from database", e);
+  }
+
   const store = await readStore();
   return [...store.media].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -100,19 +121,77 @@ export async function saveSiteContent(input: unknown): Promise<SiteContent> {
 
 export async function addMedia(item: MediaItem): Promise<MediaItem> {
   return withLock(async () => {
-    const store = await readStore();
-    store.media.unshift(item);
-    await writeStore(store);
+    await prisma.mediaItem.upsert({
+      where: { id: item.id },
+      create: {
+        id: item.id,
+        url: item.url,
+        filename: item.filename,
+        width: item.width ?? 0,
+        height: item.height ?? 0,
+        bytes: item.bytes ?? 0,
+        storage: item.storage ?? "local",
+        publicId: item.publicId ?? null,
+        createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
+      },
+      update: {
+        url: item.url,
+        filename: item.filename,
+        width: item.width ?? 0,
+        height: item.height ?? 0,
+        bytes: item.bytes ?? 0,
+        storage: item.storage ?? "local",
+        publicId: item.publicId ?? null,
+      },
+    });
+
+    // Best-effort local file sync; never fail the request on ephemeral cloud filesystems
+    try {
+      const store = await readStore();
+      store.media.unshift(item);
+      await writeStore(store);
+    } catch {
+      // Ephemeral/read-only disk on Railway/Vercel
+    }
+
     return item;
   });
 }
 
 export async function removeMedia(id: string): Promise<MediaItem | null> {
   return withLock(async () => {
-    const store = await readStore();
-    const item = store.media.find((entry) => entry.id === id) ?? null;
-    store.media = store.media.filter((entry) => entry.id !== id);
-    await writeStore(store);
-    return item;
+    let removed: MediaItem | null = null;
+
+    try {
+      const existing = await prisma.mediaItem.findUnique({ where: { id } });
+      if (existing) {
+        await prisma.mediaItem.delete({ where: { id } });
+        removed = {
+          id: existing.id,
+          url: existing.url,
+          filename: existing.filename,
+          width: existing.width,
+          height: existing.height,
+          bytes: existing.bytes,
+          createdAt: existing.createdAt.toISOString(),
+          storage: (existing.storage === "cloudinary" ? "cloudinary" : "local") as MediaItem["storage"],
+          publicId: existing.publicId ?? undefined,
+        };
+      }
+    } catch (e) {
+      console.error("[cms] failed to delete media from database", e);
+    }
+
+    try {
+      const store = await readStore();
+      const localItem = store.media.find((entry) => entry.id === id) ?? null;
+      if (!removed) removed = localItem;
+      store.media = store.media.filter((entry) => entry.id !== id);
+      await writeStore(store);
+    } catch {
+      // Ephemeral/read-only disk on Railway/Vercel
+    }
+
+    return removed;
   });
 }

@@ -220,6 +220,21 @@ model CmsContent {
   @@map("cms_content")
 }
 
+model MediaItem {
+  id        String   @id
+  url       String
+  filename  String
+  width     Int      @default(0)
+  height    Int      @default(0)
+  bytes     Int      @default(0)
+  storage   String   @default("local")
+  publicId  String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("media_items")
+}
+
 // ─────────────────────────────────────────────
 // COURIER SETTINGS (single row per provider, e.g. "steadfast")
 // Secrets are stored AES-256-GCM encrypted (see lib/courier/crypto.ts).

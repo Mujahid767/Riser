@@ -27,23 +27,33 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
   }, []);
 
   useEffect(() => {
-    if (open) void fetchMedia();
-  }, [open, fetchMedia]);
+    if (open) {
+      setSelected(value);
+      void fetchMedia();
+    }
+  }, [open, value, fetchMedia]);
 
-  async function upload(file: File) {
+  async function upload(file: File): Promise<string | null> {
     setUploading(true);
     setError("");
-    const body = new FormData();
-    body.append("file", file);
-    const res = await fetch("/api/admin/media", { method: "POST", body });
-    const data = (await res.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
-    setUploading(false);
-    if (!res.ok || !data.media) {
-      setError(data.error ?? "Upload failed.");
-      return;
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/admin/media", { method: "POST", body });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
+      if (!res.ok || !data.media?.url) {
+        setError(data.error ?? "Upload failed.");
+        return null;
+      }
+      setMedia((m) => [data.media!, ...m]);
+      setSelected(data.media.url);
+      return data.media.url;
+    } catch {
+      setError("Network error while uploading photo.");
+      return null;
+    } finally {
+      setUploading(false);
     }
-    setMedia((m) => [data.media!, ...m]);
-    setSelected(data.media!.url);
   }
 
   function confirm() {
@@ -79,10 +89,12 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
                   accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
                   className="hidden"
                   disabled={uploading}
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
-                    if (file) void upload(file).then(() => { onChange(selected); });
                     e.target.value = "";
+                    if (!file) return;
+                    const url = await upload(file);
+                    if (url) onChange(url);
                   }}
                 />
               </label>
@@ -94,6 +106,7 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
                 Choose from library
               </button>
             </div>
+            {error && !open && <p className="text-xs text-red-400">{error}</p>}
           </div>
         </div>
       </div>
