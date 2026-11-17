@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getMarketingSettingsView } from "@/lib/marketing/settings";
+import { listRecentTrackingEvents } from "@/lib/analytics/order-tracking";
 import MarketingSettingsClient from "@/components/admin/marketing-settings";
 
 export const metadata: Metadata = {
@@ -10,6 +11,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function MarketingSettingsPage() {
-  const settings = await getMarketingSettingsView();
-  return <MarketingSettingsClient initial={settings} />;
+  const [settings, ledger] = await Promise.all([
+    getMarketingSettingsView(),
+    listRecentTrackingEvents(30),
+  ]);
+  return <MarketingSettingsClient initial={settings} initialLedger={ledger} />;
 }

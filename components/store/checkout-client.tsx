@@ -164,6 +164,7 @@ export default function CheckoutClient() {
         code?: string;
         fieldErrors?: Record<string, string>;
         orderNumber?: string;
+        duplicate?: boolean;
         total?: number;
         subtotal?: number;
         shippingFee?: number;
@@ -171,12 +172,21 @@ export default function CheckoutClient() {
       };
 
       if (res.ok && data.orderNumber) {
-        // Fire CODOrderPlaced analytics event
-        analytics.codOrderPlaced({
-          orderNumber: data.orderNumber,
-          total: data.total ?? total,
-          itemCount: lines.reduce((s, l) => s + l.qty, 0),
-        });
+        // Fire CODOrderPlaced once for genuine new orders (never Purchase at unpaid checkout)
+        const codTrackKey = `riser:tracked-cod:${data.orderNumber}`;
+        if (!data.duplicate && !window.sessionStorage.getItem(codTrackKey)) {
+          try {
+            window.sessionStorage.setItem(codTrackKey, "1");
+          } catch {
+            /* ignore storage errors */
+          }
+          analytics.codOrderPlaced({
+            orderNumber: data.orderNumber,
+            total: data.total ?? total,
+            itemCount: lines.reduce((s, l) => s + l.qty, 0),
+            productIds: lines.map((l) => l.productId),
+          });
+        }
         try {
           window.sessionStorage.setItem(
             LAST_ORDER_STORAGE,

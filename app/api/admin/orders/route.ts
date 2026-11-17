@@ -2,10 +2,18 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import { listOrders, getOrder, updateOrder } from "@/lib/orders/store";
 import { releaseStock } from "@/lib/products/store";
-import type { OrderStatus } from "@/lib/orders/types";
-import { sendCapiEvent } from "@/lib/analytics/capi";
+import { ORDER_STATUSES, type OrderStatus, type PaymentStatus } from "@/lib/orders/types";
+import { dispatchOrderTrackingEvent } from "@/lib/analytics/order-tracking";
 
 export const runtime = "nodejs";
+
+const VALID_PAYMENT_STATUSES: PaymentStatus[] = [
+  "PENDING",
+  "PAID",
+  "FAILED",
+  "REFUNDED",
+  "PARTIALLY_REFUNDED",
+];
 
 // GET /api/admin/orders?id=&status=&search=&limit=&offset=
 export async function GET(request: Request) {
@@ -31,7 +39,7 @@ export async function GET(request: Request) {
   return NextResponse.json(result);
 }
 
-// PUT /api/admin/orders?id=xxx — update status/tracking
+// PUT /api/admin/orders?id=xxx — update status/tracking & trigger verified CAPI funnel events
 export async function PUT(request: Request) {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
@@ -42,12 +50,19 @@ export async function PUT(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     status?: OrderStatus;
-    paymentStatus?: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+    paymentStatus?: PaymentStatus;
     trackingNumber?: string;
     note?: string;
   } | null;
 
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
+
+  if (body.status && !ORDER_STATUSES.includes(body.status)) {
+    return NextResponse.json({ error: "Invalid order status." }, { status: 400 });
+  }
+  if (body.paymentStatus && !VALID_PAYMENT_STATUSES.includes(body.paymentStatus)) {
+    return NextResponse.json({ error: "Invalid payment status." }, { status: 400 });
+  }
 
   const before = await getOrder(id);
   if (!before) return NextResponse.json({ error: "Order not found." }, { status: 404 });
@@ -68,38 +83,21 @@ export async function PUT(request: Request) {
     await releaseStock(order.items.map((i) => ({ productId: i.productId, qty: i.qty })));
   }
 
-  // CONFIRMED → QualifiedOrder (staff verified, strong buying intent)
-  if (before.status === "PENDING" && order.status === "CONFIRMED") {
-    void sendCapiEvent({
-      eventName: "QualifiedOrder",
-      eventId: `qual-${order.orderNumber}`,
-      eventSourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd"}/admin/orders/${order.id}`,
-      userPhone: order.customerPhone,
-      userEmail: order.customerEmail,
-      customData: {
-        order_id: order.orderNumber,
-        value: order.total,
-        currency: "BDT",
-      },
-    });
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd";
+  const eventSourceUrl = `${siteUrl}/admin/orders/${order.id}`;
+
+  // Stage 2: CONFIRMED → QualifiedOrder (staff verified by phone; idempotent & persisted in Neon)
+  if (order.status === "CONFIRMED") {
+    await dispatchOrderTrackingEvent(order, "QualifiedOrder", { eventSourceUrl });
   }
 
-  // DELIVERED → Purchase (real revenue confirmed for COD)
-  if (before.status !== "DELIVERED" && order.status === "DELIVERED") {
-    void sendCapiEvent({
-      eventName: "Purchase",
-      eventId: `pur-${order.orderNumber}`,
-      eventSourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd"}/admin/orders/${order.id}`,
-      userPhone: order.customerPhone,
-      userEmail: order.customerEmail,
-      customData: {
-        order_id: order.orderNumber,
-        value: order.total,
-        currency: "BDT",
-        num_items: order.items.length,
-      },
-    });
+  // Stage 3: Purchase ONLY when BOTH status === DELIVERED AND paymentStatus === PAID
+  // Works regardless of whether DELIVERED or PAID was set last, and never repeats once SENT.
+  if (order.status === "DELIVERED" && order.paymentStatus === "PAID") {
+    await dispatchOrderTrackingEvent(order, "Purchase", { eventSourceUrl });
   }
 
-  return NextResponse.json({ order });
+  // Re-fetch with latest trackingEvents so the admin UI displays updated delivery state
+  const refreshed = (await getOrder(id)) ?? order;
+  return NextResponse.json({ order: refreshed });
 }

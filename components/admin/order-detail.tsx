@@ -3,9 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { AdminOrder, OrderStatus } from "@/lib/orders/types";
+import type { AdminOrder, OrderStatus, OrderTrackingEventName, PaymentStatus } from "@/lib/orders/types";
 import { ORDER_STATUSES, STATUS_LABELS, STATUS_COLORS } from "@/lib/orders/types";
-import { ArrowLeft, Package, Truck } from "lucide-react";
+import { ArrowLeft, Package, Truck, Radio, RefreshCw } from "lucide-react";
 
 const inputClass = "w-full bg-black/40 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-white/50";
 
@@ -21,6 +21,31 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
   const [error, setError] = useState("");
   const [sendingCourier, setSendingCourier] = useState(false);
   const [courierError, setCourierError] = useState("");
+  const [retryingEventId, setRetryingEventId] = useState<string | null>(null);
+  const [retryMsg, setRetryMsg] = useState("");
+
+  async function retryTracking(eventIdRecord: string) {
+    setRetryingEventId(eventIdRecord);
+    setRetryMsg("");
+    const res = await fetch("/api/admin/orders/tracking-retry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: eventIdRecord }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string; event?: AdminOrder["trackingEvents"] extends (infer T)[] | undefined ? T : never };
+    setRetryingEventId(null);
+    if (data.event) {
+      setOrder((prev) => ({
+        ...prev,
+        trackingEvents: (prev.trackingEvents ?? []).map((ev) => (ev.id === data.event!.id ? data.event! : ev)),
+      }));
+    }
+    if (!res.ok) {
+      setRetryMsg(data.error ?? "Retry failed.");
+    } else {
+      setRetryMsg("CAPI event sent to Meta.");
+    }
+  }
 
   async function sendToSteadfast() {
     setSendingCourier(true);
@@ -58,7 +83,13 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
     setSaved(true);
   }
 
-  const paymentLabel = { PENDING: "Pending", PAID: "Paid", FAILED: "Failed", REFUNDED: "Refunded" };
+  const paymentLabel: Record<PaymentStatus, string> = {
+    PENDING: "Pending",
+    PAID: "Paid",
+    FAILED: "Failed",
+    REFUNDED: "Refunded",
+    PARTIALLY_REFUNDED: "Partially Refunded",
+  };
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -170,6 +201,95 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
               </div>
             </div>
           </section>
+
+          {/* Meta CAPI 3-Stage Tracking Ledger */}
+          <section className="bg-admin-card border border-admin-border p-5 space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-white font-semibold text-sm uppercase tracking-wider flex items-center gap-2">
+                <Radio className="w-4 h-4 text-blue-400" /> Meta CAPI Event Ledger
+              </h2>
+              <span className="text-[10px] font-mono text-neutral-500">
+                Purchase fires only on Delivered + Paid
+              </span>
+            </div>
+
+            {retryMsg && (
+              <p className={`text-xs ${retryMsg.includes("sent") ? "text-emerald-400" : "text-red-400"}`}>
+                {retryMsg}
+              </p>
+            )}
+
+            <div className="divide-y divide-white/10 border border-white/10">
+              {(
+                [
+                  {
+                    eventName: "CODOrderPlaced" as OrderTrackingEventName,
+                    desc: "Stage 1 — Checkout submitted",
+                  },
+                  {
+                    eventName: "QualifiedOrder" as OrderTrackingEventName,
+                    desc: "Stage 2 — Staff confirmed order (Status: Confirmed)",
+                  },
+                  {
+                    eventName: "Purchase" as OrderTrackingEventName,
+                    desc: "Stage 3 — Parcel delivered & cash received (Delivered + Paid)",
+                  },
+                ] as const
+              ).map(({ eventName, desc }) => {
+                const ev = (order.trackingEvents ?? []).find((t) => t.eventName === eventName);
+                const cancelledOrReturned = order.status === "CANCELLED" || order.status === "RETURNED";
+                const notApplicable = !ev && cancelledOrReturned && eventName !== "CODOrderPlaced";
+
+                return (
+                  <div key={eventName} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-white">{eventName}</span>
+                        {ev ? (
+                          <span
+                            className={`px-2 py-0.5 text-[10px] font-mono uppercase ${
+                              ev.status === "SENT"
+                                ? "bg-emerald-500/15 text-emerald-400"
+                                : ev.status === "FAILED"
+                                  ? "bg-red-500/15 text-red-400"
+                                  : "bg-amber-500/15 text-amber-400"
+                            }`}
+                          >
+                            {ev.status} ({ev.attempts}x)
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-[10px] font-mono uppercase bg-white/5 text-neutral-400">
+                            {notApplicable ? "Not applicable" : "Waiting"}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-neutral-500 mt-0.5">{desc}</p>
+                      {ev?.eventId && (
+                        <p className="text-[10px] font-mono text-neutral-500 mt-0.5">
+                          event_id: <span className="text-neutral-300">{ev.eventId}</span>
+                          {ev.sentAt && ` · Sent ${new Date(ev.sentAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`}
+                        </p>
+                      )}
+                      {ev?.lastError && (
+                        <p className="text-[11px] text-red-400 mt-1">{ev.lastError}</p>
+                      )}
+                    </div>
+                    {ev && ev.status !== "SENT" && (
+                      <button
+                        type="button"
+                        onClick={() => void retryTracking(ev.id)}
+                        disabled={retryingEventId === ev.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-white/20 text-white hover:border-white text-[10px] font-mono uppercase tracking-wider shrink-0 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${retryingEventId === ev.id ? "animate-spin" : ""}`} />
+                        {retryingEventId === ev.id ? "Retrying…" : "Retry"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </div>
 
         {/* Right — update panel */}
@@ -188,8 +308,8 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
 
             <label className="block space-y-1.5">
               <span className="text-[10px] uppercase tracking-widest text-neutral-500">Payment status</span>
-              <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as AdminOrder["paymentStatus"])} className={inputClass}>
-                {(["PENDING", "PAID", "FAILED", "REFUNDED"] as const).map((s) => (
+              <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as PaymentStatus)} className={inputClass}>
+                {(["PENDING", "PAID", "FAILED", "REFUNDED", "PARTIALLY_REFUNDED"] as const).map((s) => (
                   <option key={s} value={s}>{paymentLabel[s]}</option>
                 ))}
               </select>

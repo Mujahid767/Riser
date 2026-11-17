@@ -7,7 +7,7 @@ import { releaseStock, reserveStock } from "@/lib/products/store";
 import { getPriceForSize } from "@/lib/products/types";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { calculateShipping, DISTRICTS, MAX_QTY_PER_LINE, normalizeBdPhone } from "@/lib/shipping";
-import { sendCapiEvent } from "@/lib/analytics/capi";
+import { dispatchOrderTrackingEvent } from "@/lib/analytics/order-tracking";
 import { validateCoupon, useCoupon } from "@/lib/coupons";
 
 export const runtime = "nodejs";
@@ -239,54 +239,16 @@ export async function POST(request: Request) {
       void useCoupon(appliedCouponCode);
     }
 
-    // Server-side CAPI: fire Purchase and CODOrderPlaced for new genuine orders only
+    // Server-side CAPI: send CODOrderPlaced ONLY when a new order is created (never Purchase on unpaid COD)
     if (created) {
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd";
       const userAgent = request.headers.get("user-agent") || undefined;
       const ip = clientIp(request);
 
-      // 1. Purchase event with deduplication key pur-${order.orderNumber}
-      void sendCapiEvent({
-        eventName: "Purchase",
-        eventId: `pur-${order.orderNumber}`,
+      await dispatchOrderTrackingEvent(order, "CODOrderPlaced", {
         eventSourceUrl: `${siteUrl}/order-success?order=${order.orderNumber}`,
-        userPhone: phone,
-        userEmail: body.customerEmail || undefined,
-        userName: body.customerName,
-        userCity: body.district,
         clientIp: ip,
         clientUserAgent: userAgent,
-        customData: {
-          order_id: order.orderNumber,
-          value: order.total,
-          currency: "BDT",
-          num_items: orderItems.reduce((s, i) => s + i.qty, 0),
-          content_type: "product",
-          contents: orderItems.map((i) => ({
-            id: i.productId,
-            quantity: i.qty,
-            item_price: i.unitPrice,
-          })),
-        },
-      });
-
-      // 2. CODOrderPlaced event
-      void sendCapiEvent({
-        eventName: "CODOrderPlaced",
-        eventId: `cod-${order.orderNumber}`,
-        eventSourceUrl: `${siteUrl}/order-success?order=${order.orderNumber}`,
-        userPhone: phone,
-        userEmail: body.customerEmail || undefined,
-        userName: body.customerName,
-        userCity: body.district,
-        clientIp: ip,
-        clientUserAgent: userAgent,
-        customData: {
-          order_id: order.orderNumber,
-          value: order.total,
-          currency: "BDT",
-          num_items: orderItems.length,
-        },
       });
     }
 

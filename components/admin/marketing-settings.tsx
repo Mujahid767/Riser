@@ -13,15 +13,33 @@ import {
   Radio,
   Share2,
   Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import type { MarketingSettingsView } from "@/lib/marketing/settings";
+import type { OrderTrackingEvent } from "@/lib/orders/types";
+
+type LedgerData = {
+  events: OrderTrackingEvent[];
+  counts: { sent: number; failed: number; pending: number };
+};
 
 const inputClass =
   "w-full bg-black/40 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-white/50 placeholder:text-neutral-600";
 const labelClass = "text-[10px] uppercase tracking-widest text-neutral-400 font-mono";
 
-export default function MarketingSettingsClient({ initial }: { initial: MarketingSettingsView }) {
+export default function MarketingSettingsClient({
+  initial,
+  initialLedger,
+}: {
+  initial: MarketingSettingsView;
+  initialLedger?: LedgerData;
+}) {
   const [settings, setSettings] = useState(initial);
+  const [ledger, setLedger] = useState<LedgerData>(
+    initialLedger ?? { events: [], counts: { sent: 0, failed: 0, pending: 0 } }
+  );
+  const [retryingAll, setRetryingAll] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [gtmId, setGtmId] = useState(initial.gtmId);
   const [ga4Id, setGa4Id] = useState(initial.ga4Id);
   const [metaPixelId, setMetaPixelId] = useState(initial.metaPixelId);
@@ -29,7 +47,6 @@ export default function MarketingSettingsClient({ initial }: { initial: Marketin
   const [metaTestEventCode, setMetaTestEventCode] = useState(initial.metaTestEventCode);
   const [googleSiteVerification, setGoogleSiteVerification] = useState(initial.googleSiteVerification);
   const [facebookDomainVerification, setFacebookDomainVerification] = useState(initial.facebookDomainVerification);
-  const [purchaseEventTrigger, setPurchaseEventTrigger] = useState(initial.purchaseEventTrigger);
   const [enableAdvancedMatching, setEnableAdvancedMatching] = useState(initial.enableAdvancedMatching);
 
   const [saving, setSaving] = useState(false);
@@ -65,7 +82,7 @@ export default function MarketingSettingsClient({ initial }: { initial: Marketin
         metaTestEventCode,
         googleSiteVerification,
         facebookDomainVerification,
-        purchaseEventTrigger,
+        purchaseEventTrigger: "ORDER_DELIVERED",
         enableAdvancedMatching,
       }),
     });
@@ -100,6 +117,51 @@ export default function MarketingSettingsClient({ initial }: { initial: Marketin
       kind: "ok",
       text: `${data.message} (Test Order: ${data.testOrderId})`,
     });
+  }
+
+  async function refreshLedger() {
+    const res = await fetch("/api/admin/marketing");
+    const data = (await res.json().catch(() => ({}))) as { ledger?: LedgerData };
+    if (data.ledger) setLedger(data.ledger);
+  }
+
+  async function handleRetryAll() {
+    setRetryingAll(true);
+    setMessage(null);
+    const res = await fetch("/api/admin/orders/tracking-retry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retryAll: true }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { retried?: number; sent?: number; failed?: number; error?: string };
+    setRetryingAll(false);
+    await refreshLedger();
+    if (!res.ok) {
+      setMessage({ kind: "error", text: data.error || "Could not retry failed events." });
+    } else {
+      setMessage({
+        kind: "ok",
+        text: `Retried ${data.retried ?? 0} event(s): ${data.sent ?? 0} sent, ${data.failed ?? 0} failed.`,
+      });
+    }
+  }
+
+  async function handleRetrySingle(id: string) {
+    setRetryingId(id);
+    setMessage(null);
+    const res = await fetch("/api/admin/orders/tracking-retry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    setRetryingId(null);
+    await refreshLedger();
+    if (!res.ok) {
+      setMessage({ kind: "error", text: data.error || "Retry failed." });
+    } else {
+      setMessage({ kind: "ok", text: "CAPI event sent successfully." });
+    }
   }
 
   return (
@@ -142,7 +204,7 @@ export default function MarketingSettingsClient({ initial }: { initial: Marketin
               </h2>
             </div>
             <span className="text-[10px] font-mono uppercase bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5">
-              High ROAS Engine
+              Graph API v26.0 • Verified COD Funnel
             </span>
           </div>
 
@@ -203,20 +265,16 @@ export default function MarketingSettingsClient({ initial }: { initial: Marketin
               </span>
             </label>
 
-            <div className="grid sm:grid-cols-2 gap-4 pt-2">
-              <div>
-                <label className={labelClass}>Purchase Event Trigger</label>
-                <select
-                  value={purchaseEventTrigger}
-                  onChange={(e) => setPurchaseEventTrigger(e.target.value as "ORDER_PLACED" | "ORDER_DELIVERED")}
-                  className={inputClass}
-                >
-                  <option value="ORDER_PLACED">When Customer Places Order (Recommended for Meta Ad Learning)</option>
-                  <option value="ORDER_DELIVERED">When Order Marked Delivered by Admin</option>
-                </select>
-                <p className="text-[11px] text-neutral-500 mt-1">
-                  &quot;Order Placed&quot; allows Meta algorithm to optimize campaigns within the standard 7-day conversion window.
+            <div className="grid sm:grid-cols-2 gap-4 pt-2 items-start">
+              <div className="bg-black/40 border border-white/10 p-3.5 space-y-1.5 text-xs">
+                <p className="text-[10px] uppercase tracking-widest text-emerald-400 font-mono font-bold">
+                  3-Stage Verified COD Event Policy (Active)
                 </p>
+                <ul className="space-y-1 text-neutral-300 text-[11px]">
+                  <li><b>1. CODOrderPlaced:</b> Sent once when customer submits checkout (browser + CAPI deduplicated).</li>
+                  <li><b>2. QualifiedOrder:</b> Sent when staff confirms order (<code className="text-white">CONFIRMED</code>).</li>
+                  <li><b>3. Purchase:</b> Sent <b>only</b> when <code className="text-white">DELIVERED</code> + <code className="text-white">PAID</code>. Unpaid/cancelled/returned orders never count as Purchases.</li>
+                </ul>
               </div>
 
               <div className="flex flex-col justify-end">
@@ -230,7 +288,7 @@ export default function MarketingSettingsClient({ initial }: { initial: Marketin
                   {testing ? "Testing..." : "Send Test Event to Meta"}
                 </button>
                 <p className="text-[10px] text-neutral-500 mt-1">
-                  Dispatches a test event immediately to verify in Meta Events Manager &gt; Test Events.
+                  Dispatches a test event via Graph API v26.0 using your Test Event Code so you can inspect it live in Meta Events Manager &gt; Test Events.
                 </p>
               </div>
             </div>
@@ -409,6 +467,97 @@ export default function MarketingSettingsClient({ initial }: { initial: Marketin
         </div>
       </div>
 
+      {/* Live CAPI Event Ledger */}
+      <div className="bg-admin-card border border-admin-border p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div>
+            <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-2">
+              <Radio className="w-4 h-4 text-emerald-400" />
+              Server CAPI Delivery Log (Persisted in Neon)
+            </h3>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              Every order event is locked once per order to prevent duplicates. Failed deliveries can be retried safely with the same event ID.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-xs font-mono">
+            <span className="text-emerald-400">Sent: {ledger.counts.sent}</span>
+            <span className="text-red-400">Failed: {ledger.counts.failed}</span>
+            <span className="text-amber-400">Pending: {ledger.counts.pending}</span>
+            {ledger.counts.failed + ledger.counts.pending > 0 && (
+              <button
+                type="button"
+                onClick={handleRetryAll}
+                disabled={retryingAll}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${retryingAll ? "animate-spin" : ""}`} />
+                {retryingAll ? "Retrying…" : "Retry Failed"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {ledger.events.length === 0 ? (
+          <p className="text-xs text-neutral-500 py-4">
+            No order CAPI events recorded yet. Place a test order and update its status through Confirmed → Delivered + Paid to verify the full funnel.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-white/10 text-[10px] font-mono uppercase text-neutral-500">
+                  <th className="py-2 pr-3">Order</th>
+                  <th className="py-2 pr-3">Event</th>
+                  <th className="py-2 pr-3">Event ID</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Attempts</th>
+                  <th className="py-2 pr-3">Details</th>
+                  <th className="py-2 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {ledger.events.map((ev) => (
+                  <tr key={ev.id}>
+                    <td className="py-2.5 pr-3 font-mono text-white">{ev.orderNumber}</td>
+                    <td className="py-2.5 pr-3 font-mono text-neutral-200">{ev.eventName}</td>
+                    <td className="py-2.5 pr-3 font-mono text-neutral-400">{ev.eventId}</td>
+                    <td className="py-2.5 pr-3">
+                      <span
+                        className={`px-2 py-0.5 text-[10px] font-mono uppercase ${
+                          ev.status === "SENT"
+                            ? "bg-emerald-500/15 text-emerald-400"
+                            : ev.status === "FAILED"
+                              ? "bg-red-500/15 text-red-400"
+                              : "bg-amber-500/15 text-amber-400"
+                        }`}
+                      >
+                        {ev.status}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3 font-mono text-neutral-400">{ev.attempts}</td>
+                    <td className="py-2.5 pr-3 text-neutral-400 max-w-xs truncate">
+                      {ev.lastError ? <span className="text-red-400">{ev.lastError}</span> : ev.sentAt ? new Date(ev.sentAt).toLocaleString("en-GB") : "Pending"}
+                    </td>
+                    <td className="py-2.5 text-right">
+                      {ev.status !== "SENT" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleRetrySingle(ev.id)}
+                          disabled={retryingId === ev.id}
+                          className="px-2.5 py-1 border border-white/20 text-white hover:border-white text-[10px] font-mono uppercase disabled:opacity-50"
+                        >
+                          {retryingId === ev.id ? "…" : "Retry"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Pro Advertising Strategy Guide */}
       <div className="bg-gradient-to-br from-[#0e0e14] to-[#12121c] border border-brand-500/20 p-6 space-y-4">
         <div className="flex items-center gap-2 text-brand-400">
@@ -419,9 +568,9 @@ export default function MarketingSettingsClient({ initial }: { initial: Marketin
         </div>
         <div className="grid md:grid-cols-3 gap-4 text-xs text-neutral-300">
           <div className="border border-white/10 bg-black/40 p-4 space-y-1.5">
-            <h4 className="font-bold text-white font-mono uppercase text-[11px]">1. Deduplicated Tracking</h4>
+            <h4 className="font-bold text-white font-mono uppercase text-[11px]">1. Deduplicated 3-Stage Funnel</h4>
             <p className="text-neutral-400 leading-relaxed">
-              Every order uses matching <code className="text-neutral-200">event_id = pur-ORDER_NUMBER</code> on both browser Pixel and server CAPI. Meta deduplicates them, preventing fake counts and maximizing attribution.
+              Checkout uses matching <code className="text-neutral-200">cod-ORDER_NUMBER</code> across browser &amp; CAPI. Staff confirmations send <code className="text-neutral-200">QualifiedOrder</code>, and <code className="text-neutral-200">Purchase</code> fires strictly on <code className="text-neutral-200">DELIVERED + PAID</code>.
             </p>
           </div>
           <div className="border border-white/10 bg-black/40 p-4 space-y-1.5">

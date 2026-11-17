@@ -5,7 +5,8 @@
  * preventing Meta from double-counting browser + server events.
  */
 
-type EventProperties = Record<string, string | number | boolean | undefined>;
+type EventValue = string | number | boolean | string[] | undefined;
+type EventProperties = Record<string, EventValue>;
 
 declare global {
   interface Window {
@@ -83,7 +84,8 @@ export const analytics = {
     fbEvent(
       "ViewContent",
       {
-        content_ids: params.productId,
+        content_ids: [params.productId],
+        content_type: "product",
         content_name: params.productName,
         content_category: params.category,
         value: params.price,
@@ -113,7 +115,8 @@ export const analytics = {
     fbEvent(
       "AddToCart",
       {
-        content_ids: params.productId,
+        content_ids: [params.productId],
+        content_type: "product",
         content_name: params.productName,
         value: params.price * params.quantity,
         currency: "BDT",
@@ -136,14 +139,14 @@ export const analytics = {
   },
 
   /**
-   * COD order submitted (not yet verified or delivered — do NOT send Purchase here).
-   * Custom event "CODOrderPlaced" for tracking unverified demand.
-   * eventId = `cod-${orderNumber}` — matches what the order API sends to CAPI.
+   * COD order submitted (unverified, unpaid — NEVER fire Purchase here).
+   * eventId = `cod-${orderNumber}` — matches the server CAPI event for deduplication.
    */
   codOrderPlaced(params: {
     orderNumber: string;
     total: number;
     itemCount: number;
+    productIds?: string[];
   }): void {
     const eventId = `cod-${params.orderNumber}`;
     gtagEvent("cod_order_placed", {
@@ -158,16 +161,16 @@ export const analytics = {
         value: params.total,
         currency: "BDT",
         num_items: params.itemCount,
+        ...(params.productIds?.length ? { content_ids: params.productIds, content_type: "product" } : {}),
       },
       eventId
     );
   },
 
   /**
-   * Purchase — fired ONLY when admin marks an order as DELIVERED.
-   * This signals real revenue, not just a submitted COD order.
-   * Called from the admin panel via a server action / API, then
-   * also fires CAPI from the server side.
+   * Note: For Riser's COD workflow, genuine Purchase events are fired server-side via CAPI
+   * strictly when an order is both DELIVERED and PAID (tracked & deduplicated in Neon).
+   * Never call Purchase at initial COD checkout.
    */
   purchase(params: {
     orderId: string;
@@ -187,6 +190,8 @@ export const analytics = {
         order_id: params.orderNumber,
         value: params.totalValue,
         currency: "BDT",
+        content_type: "product",
+        ...(params.items?.length ? { content_ids: params.items.map((i) => i.id) } : {}),
       },
       eventId
     );

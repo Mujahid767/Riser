@@ -2,16 +2,20 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import { getMarketingSettingsView, saveMarketingSettings } from "@/lib/marketing/settings";
 import { sendCapiEvent } from "@/lib/analytics/capi";
+import { listRecentTrackingEvents } from "@/lib/analytics/order-tracking";
 
 export const runtime = "nodejs";
 
-// GET /api/admin/marketing — read settings (tokens masked)
+// GET /api/admin/marketing — read settings (tokens masked) + recent CAPI ledger
 export async function GET() {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
-  const settings = await getMarketingSettingsView();
-  return NextResponse.json({ settings });
+  const [settings, ledger] = await Promise.all([
+    getMarketingSettingsView(),
+    listRecentTrackingEvents(30),
+  ]);
+  return NextResponse.json({ settings, ledger });
 }
 
 // PUT /api/admin/marketing — update settings
@@ -33,7 +37,7 @@ export async function PUT(request: Request) {
       metaTestEventCode: str(body.metaTestEventCode),
       googleSiteVerification: str(body.googleSiteVerification),
       facebookDomainVerification: str(body.facebookDomainVerification),
-      purchaseEventTrigger: body.purchaseEventTrigger === "ORDER_DELIVERED" ? "ORDER_DELIVERED" : "ORDER_PLACED",
+      purchaseEventTrigger: "ORDER_DELIVERED",
       enableAdvancedMatching: typeof body.enableAdvancedMatching === "boolean" ? body.enableAdvancedMatching : true,
     });
 

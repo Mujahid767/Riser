@@ -67,7 +67,7 @@ export async function getMarketingSettingsView(): Promise<MarketingSettingsView>
     metaTestEventCode: row?.metaTestEventCode ?? "",
     googleSiteVerification: row?.googleSiteVerification ?? "",
     facebookDomainVerification: row?.facebookDomainVerification ?? "",
-    purchaseEventTrigger: (row?.purchaseEventTrigger as "ORDER_PLACED" | "ORDER_DELIVERED") || "ORDER_PLACED",
+    purchaseEventTrigger: "ORDER_DELIVERED",
     enableAdvancedMatching: row?.enableAdvancedMatching ?? true,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
     feedUrl: `${baseUrl}/api/feeds/facebook`,
@@ -93,7 +93,7 @@ export async function getMarketingCredentials(): Promise<{
     pixelId: pixelId || undefined,
     capiToken: capiToken || undefined,
     testEventCode: row?.metaTestEventCode?.trim() || undefined,
-    purchaseEventTrigger: (row?.purchaseEventTrigger as "ORDER_PLACED" | "ORDER_DELIVERED") || "ORDER_PLACED",
+    purchaseEventTrigger: "ORDER_DELIVERED",
     enableAdvancedMatching: row?.enableAdvancedMatching ?? true,
   };
 }
@@ -134,7 +134,7 @@ export async function saveMarketingSettings(input: MarketingSettingsInput) {
     metaTestEventCode: clean(input.metaTestEventCode) ?? existing?.metaTestEventCode ?? null,
     googleSiteVerification: clean(input.googleSiteVerification) ?? existing?.googleSiteVerification ?? null,
     facebookDomainVerification: clean(input.facebookDomainVerification) ?? existing?.facebookDomainVerification ?? null,
-    purchaseEventTrigger: input.purchaseEventTrigger ?? existing?.purchaseEventTrigger ?? "ORDER_PLACED",
+    purchaseEventTrigger: "ORDER_DELIVERED",
     enableAdvancedMatching: input.enableAdvancedMatching ?? existing?.enableAdvancedMatching ?? true,
   };
 

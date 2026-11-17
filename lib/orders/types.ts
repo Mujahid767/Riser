@@ -5,10 +5,29 @@ export type OrderStatus =
   | "PACKED"
   | "SHIPPED"
   | "DELIVERED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "RETURN_REQUESTED"
+  | "RETURNED";
 
 export type PaymentMethod = "COD" | "BKASH" | "NAGAD";
-export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIALLY_REFUNDED";
+
+export type OrderTrackingEventName = "CODOrderPlaced" | "QualifiedOrder" | "Purchase";
+export type OrderTrackingEventStatus = "PENDING" | "SENT" | "FAILED";
+
+export type OrderTrackingEvent = {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  eventName: OrderTrackingEventName;
+  eventId: string;
+  status: OrderTrackingEventStatus;
+  attempts: number;
+  lastError?: string;
+  lastAttemptAt?: string;
+  sentAt?: string;
+  createdAt: string;
+};
 
 export type OrderItem = {
   productId: string;
@@ -53,6 +72,8 @@ export type AdminOrder = {
   idempotencyKey?: string;
   /** Automatic review flags, e.g. "repeat_phone_24h" */
   flags?: string[];
+  /** Server-side Meta CAPI delivery log persisted in Neon */
+  trackingEvents?: OrderTrackingEvent[];
   createdAt: string;
   updatedAt: string;
 };
@@ -65,6 +86,8 @@ export const ORDER_STATUSES: OrderStatus[] = [
   "SHIPPED",
   "DELIVERED",
   "CANCELLED",
+  "RETURN_REQUESTED",
+  "RETURNED",
 ];
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
@@ -75,6 +98,8 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
   SHIPPED: "Shipped",
   DELIVERED: "Delivered",
   CANCELLED: "Cancelled",
+  RETURN_REQUESTED: "Return Requested",
+  RETURNED: "Returned",
 };
 
 export const STATUS_COLORS: Record<OrderStatus, string> = {
@@ -85,5 +110,6 @@ export const STATUS_COLORS: Record<OrderStatus, string> = {
   SHIPPED: "bg-cyan-500/15 text-cyan-400",
   DELIVERED: "bg-emerald-500/15 text-emerald-400",
   CANCELLED: "bg-red-500/15 text-red-400",
+  RETURN_REQUESTED: "bg-orange-500/15 text-orange-400",
+  RETURNED: "bg-rose-500/15 text-rose-400",
 };
-

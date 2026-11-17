@@ -1,16 +1,19 @@
 /**
  * lib/analytics/capi.ts
  * Server-side Meta Conversions API (CAPI) helper.
- * Sends events to Meta to deduplicate with client-side Pixel using matching event_id.
- * Credentials and test_event_code are loaded dynamically from settings or environment variables.
+ * Sends events to Meta using Graph API v26.0 to deduplicate with client-side Pixel
+ * via matching event_name + event_id.
  */
 import { getMarketingCredentials } from "@/lib/marketing/settings";
 
+export const META_GRAPH_API_VERSION = process.env.META_API_VERSION || "v26.0";
+
 export type CapiEvent = {
   eventName: string;
-  eventId: string; // MUST match the client-side fbq eventID for deduplication
+  eventId: string; // MUST match the client-side fbq eventID when browser also sends the event
   eventSourceUrl: string;
-  userPhone?: string; // e.g. 017XXXXXXXX (will be normalized & hashed)
+  eventTime?: number; // Unix seconds; defaults to now
+  userPhone?: string; // e.g. 017XXXXXXXX (normalized & SHA-256 hashed)
   userEmail?: string;
   userName?: string;
   userCity?: string;
@@ -19,18 +22,23 @@ export type CapiEvent = {
   customData?: Record<string, unknown>;
 };
 
-export async function sendCapiEvent(event: CapiEvent): Promise<{ ok: boolean; error?: string }> {
+export type CapiSendResult = {
+  ok: boolean;
+  error?: string;
+  eventsReceived?: number;
+};
+
+export async function sendCapiEvent(event: CapiEvent): Promise<CapiSendResult> {
   try {
     const creds = await getMarketingCredentials().catch(() => ({
       pixelId: process.env.NEXT_PUBLIC_META_PIXEL_ID,
       capiToken: process.env.META_CAPI_ACCESS_TOKEN,
       testEventCode: undefined,
-      purchaseEventTrigger: "ORDER_PLACED" as const,
       enableAdvancedMatching: true,
     }));
 
-    const pixelId = creds.pixelId;
-    const token = creds.capiToken;
+    const pixelId = creds.pixelId?.trim();
+    const token = creds.capiToken?.trim();
 
     if (!pixelId || !token) {
       return { ok: false, error: "Meta Pixel ID or CAPI Access Token not configured." };
@@ -40,7 +48,6 @@ export async function sendCapiEvent(event: CapiEvent): Promise<{ ok: boolean; er
 
     if (creds.enableAdvancedMatching) {
       if (event.userPhone) {
-        // Normalize BD phone to +8801XXXXXXXXX or 8801XXXXXXXXX for Meta
         const digits = event.userPhone.replace(/\D/g, "");
         const formatted = digits.startsWith("88") ? digits : `88${digits}`;
         userData.ph = [await hashSha256(formatted)];
@@ -67,7 +74,7 @@ export async function sendCapiEvent(event: CapiEvent): Promise<{ ok: boolean; er
 
     const eventPayload: Record<string, unknown> = {
       event_name: event.eventName,
-      event_time: Math.floor(Date.now() / 1000),
+      event_time: event.eventTime ?? Math.floor(Date.now() / 1000),
       event_id: event.eventId,
       event_source_url: event.eventSourceUrl,
       action_source: "website",
@@ -79,25 +86,43 @@ export async function sendCapiEvent(event: CapiEvent): Promise<{ ok: boolean; er
       data: [eventPayload],
     };
 
-    // If test event code is configured, pass it to view in Meta Events Manager > Test Events
     if (creds.testEventCode) {
       payload.test_event_code = creds.testEventCode;
     }
 
-    const res = await fetch(`https://graph.facebook.com/v19.0/${pixelId}/events?access_token=${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const res = await fetch(
+      `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${encodeURIComponent(pixelId)}/events?access_token=${encodeURIComponent(token)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
+      }
+    );
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { ok: false, error: data.error?.message || `HTTP ${res.status}` };
+    const data = (await res.json().catch(() => ({}))) as {
+      events_received?: number;
+      error?: { message?: string; code?: number };
+    };
+
+    if (!res.ok || data.error) {
+      return {
+        ok: false,
+        error: data.error?.message || `Meta Graph API returned HTTP ${res.status}`,
+      };
     }
 
-    return { ok: true };
+    return { ok: true, eventsReceived: data.events_received ?? 1 };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to send CAPI event" };
+    const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+    return {
+      ok: false,
+      error: timedOut
+        ? "Meta CAPI request timed out after 10s"
+        : err instanceof Error
+          ? err.message
+          : "Failed to send CAPI event",
+    };
   }
 }
 

@@ -4,7 +4,7 @@
  * Public function signatures are unchanged — all callers work without modification.
  */
 import prisma from "@/lib/db";
-import type { AdminOrder, OrderItem, OrderStatus } from "./types";
+import type { AdminOrder, OrderItem, OrderStatus, OrderTrackingEvent } from "./types";
 import { Decimal } from "@prisma/client/runtime/library";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -50,6 +50,19 @@ type DbOrder = {
     quantity: number;
     unitPrice: Decimal;
   }[];
+  trackingEvents?: {
+    id: string;
+    orderId: string;
+    orderNumber: string;
+    eventName: string;
+    eventId: string;
+    status: string;
+    attempts: number;
+    lastError: string | null;
+    lastAttemptAt: Date | null;
+    sentAt: Date | null;
+    createdAt: Date;
+  }[];
 };
 
 function toAdminOrder(row: DbOrder): AdminOrder {
@@ -93,6 +106,19 @@ function toAdminOrder(row: DbOrder): AdminOrder {
         : undefined,
     idempotencyKey: row.idempotencyKey ?? undefined,
     flags,
+    trackingEvents: row.trackingEvents?.map((te) => ({
+      id: te.id,
+      orderId: te.orderId,
+      orderNumber: te.orderNumber,
+      eventName: te.eventName as OrderTrackingEvent["eventName"],
+      eventId: te.eventId,
+      status: te.status as OrderTrackingEvent["status"],
+      attempts: te.attempts,
+      lastError: te.lastError ?? undefined,
+      lastAttemptAt: te.lastAttemptAt?.toISOString(),
+      sentAt: te.sentAt?.toISOString(),
+      createdAt: te.createdAt.toISOString(),
+    })),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -154,7 +180,7 @@ export async function listOrders(opts?: {
 export async function getOrder(id: string): Promise<AdminOrder | null> {
   const row = await prisma.order.findUnique({
     where: { id },
-    include: { items: true },
+    include: { items: true, trackingEvents: { orderBy: { createdAt: "asc" } } },
   });
   return row ? toAdminOrder(row) : null;
 }
