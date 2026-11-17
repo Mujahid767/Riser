@@ -85,9 +85,9 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
                   disabled={uploading}
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
-                    e.target.value = "";
                     if (!file) return;
                     const url = await upload(file);
+                    e.target.value = "";
                     if (url) onChange(url);
                   }}
                 />

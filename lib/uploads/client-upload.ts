@@ -1,7 +1,7 @@
 import type { MediaItem } from "@/lib/cms/types";
 
 const MAX_DIMENSION = 2400;
-const OPTIMIZE_THRESHOLD_BYTES = 2.5 * 1024 * 1024; // 2.5 MB
+const OPTIMIZE_THRESHOLD_BYTES = 1 * 1024 * 1024; // 1 MB
 
 /**
  * Downscale huge DSLR photos (e.g. 7-10 MB) in the browser to max 2400px @ 92% WebP.
