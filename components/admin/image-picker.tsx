@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import type { MediaItem } from "@/lib/cms/types";
+import { uploadAdminImage } from "@/lib/uploads/client-upload";
 import { X, Upload, Check } from "lucide-react";
 
 interface Props {
@@ -37,19 +38,12 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
     setUploading(true);
     setError("");
     try {
-      const body = new FormData();
-      body.append("file", file);
-      const res = await fetch("/api/admin/media", { method: "POST", body });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
-      if (!res.ok || !data.media?.url) {
-        setError(data.error ?? "Upload failed.");
-        return null;
-      }
-      setMedia((m) => [data.media!, ...m]);
-      setSelected(data.media.url);
-      return data.media.url;
-    } catch {
-      setError("Network error while uploading photo.");
+      const item = await uploadAdminImage(file);
+      setMedia((m) => [item, ...m]);
+      setSelected(item.url);
+      return item.url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.");
       return null;
     } finally {
       setUploading(false);

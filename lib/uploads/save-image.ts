@@ -5,7 +5,7 @@ import sharp from "sharp";
 import type { MediaItem } from "@/lib/cms/types";
 import cloudinary, { cloudinaryConfigured } from "@/lib/cloudinary";
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
 const ALLOWED = new Set(["jpeg", "png", "webp", "gif", "avif"]);
 
 export class UploadError extends Error {}
@@ -23,10 +23,10 @@ async function processImage(file: File): Promise<{ buffer: Buffer; width: number
     throw new UploadError("Upload a JPG, PNG, WEBP, GIF, or AVIF photo.");
   }
 
-  // Resize to max 2000px on the longest side, convert to WebP quality 85
+  // Resize to max 2400px on the longest side, convert to WebP quality 90 for crisp DSLR detail
   const buffer = await image
-    .resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true })
-    .webp({ quality: 85, effort: 4 })
+    .resize({ width: 2400, height: 2400, fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 90, effort: 4 })
     .toBuffer();
 
   const info = await sharp(buffer).metadata();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { uploadAdminImage } from "@/lib/uploads/client-upload";
 
 export default function ImageField({
   label,
@@ -17,19 +18,14 @@ export default function ImageField({
   async function upload(file: File) {
     setBusy(true);
     setError("");
-    const body = new FormData();
-    body.append("file", file);
-    const response = await fetch("/api/admin/media", { method: "POST", body });
-    const data = (await response.json().catch(() => ({}))) as {
-      error?: string;
-      media?: { url: string };
-    };
-    setBusy(false);
-    if (!response.ok || !data.media?.url) {
-      setError(data.error || "Upload failed.");
-      return;
+    try {
+      const item = await uploadAdminImage(file);
+      onChange(item.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setBusy(false);
     }
-    onChange(data.media.url);
   }
 
   return (

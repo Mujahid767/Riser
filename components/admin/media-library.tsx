@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { MediaItem } from "@/lib/cms/types";
+import { uploadAdminImage } from "@/lib/uploads/client-upload";
 import { Upload, Cloud, HardDrive, AlertTriangle, Check, Trash2 } from "lucide-react";
 
 function formatBytes(bytes: number): string {
@@ -27,16 +28,14 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
   async function upload(file: File) {
     setBusy(true);
     setError("");
-    const body = new FormData();
-    body.append("file", file);
-    const response = await fetch("/api/admin/media", { method: "POST", body });
-    const data = (await response.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
-    setBusy(false);
-    if (!response.ok || !data.media) {
-      setError(data.error ?? "Upload failed.");
-      return;
+    try {
+      const item = await uploadAdminImage(file);
+      setMedia((m) => [item, ...m]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setBusy(false);
     }
-    setMedia((m) => [data.media!, ...m]);
   }
 
   async function remove(id: string) {
