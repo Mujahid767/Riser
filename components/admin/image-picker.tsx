@@ -84,11 +84,15 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
                   className="hidden"
                   disabled={uploading}
                   onChange={async (e) => {
-                    const file = e.target.files?.[0];
+                    const input = e.currentTarget;
+                    const file = input.files?.[0];
                     if (!file) return;
-                    const url = await upload(file);
-                    e.target.value = "";
-                    if (url) onChange(url);
+                    try {
+                      const url = await upload(file);
+                      if (url) onChange(url);
+                    } finally {
+                      input.value = "";
+                    }
                   }}
                 />
               </label>
@@ -100,7 +104,11 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
                 Choose from library
               </button>
             </div>
-            {error && !open && <p className="text-xs text-red-400">{error}</p>}
+            {error && !open && (
+              <p role="alert" className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 px-2.5 py-1.5">
+                {error}
+              </p>
+            )}
           </div>
         </div>
       </div>

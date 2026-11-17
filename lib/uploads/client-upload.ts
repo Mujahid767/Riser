@@ -1,12 +1,11 @@
 import type { MediaItem } from "@/lib/cms/types";
 
 const MAX_DIMENSION = 2400;
-const OPTIMIZE_THRESHOLD_BYTES = 1 * 1024 * 1024; // 1 MB
+const OPTIMIZE_THRESHOLD_BYTES = 900 * 1024; // Optimize any image > 900 KB for fast crisp DSLR uploads
 
 /**
- * Downscale huge DSLR photos (e.g. 7-10 MB) in the browser to max 2400px @ 92% WebP.
- * Keeps crisp zoomable detail while cutting upload size to ~0.7-1.4 MB so it never hits
- * Cloudinary's 10 MB free-tier cap or server/proxy limits.
+ * Downscale large DSLR photos (e.g. 2-10 MB) in the browser to max 2400px @ 92% WebP.
+ * Preserves sharp zoomable resolution (~0.5-1.3 MB) while staying well under any upload cap.
  */
 async function optimizeDslrImage(file: File): Promise<File> {
   if (file.size <= OPTIMIZE_THRESHOLD_BYTES || file.type === "image/gif") {
@@ -57,71 +56,96 @@ type SignatureResponse =
       tags: string;
     };
 
-export async function uploadAdminImage(rawFile: File): Promise<MediaItem> {
-  const file = await optimizeDslrImage(rawFile);
-
-  // 1. Check if Cloudinary signed direct upload is available
+async function tryDirectCloudinaryUpload(file: File): Promise<MediaItem | null> {
   const sigRes = await fetch("/api/admin/media/signature", { method: "POST" });
-  const sig = (await sigRes.json().catch(() => null)) as (SignatureResponse & { error?: string }) | null;
-
   if (sigRes.status === 401) {
     throw new Error("Your admin session expired. Please sign in again.");
   }
+  if (!sigRes.ok) return null;
 
-  if (sig && sig.configured) {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("api_key", sig.apiKey);
-    form.append("timestamp", String(sig.timestamp));
-    form.append("signature", sig.signature);
-    form.append("folder", sig.folder);
-    form.append("public_id", sig.publicId);
-    form.append("tags", sig.tags);
+  const sig = (await sigRes.json().catch(() => null)) as SignatureResponse | null;
+  if (!sig || !sig.configured) return null;
 
-    const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, {
-      method: "POST",
-      body: form,
-    });
-    const cloudData = (await cloudRes.json().catch(() => ({}))) as {
-      secure_url?: string;
-      public_id?: string;
-      width?: number;
-      height?: number;
-      bytes?: number;
-      error?: { message?: string };
-    };
+  const form = new FormData();
+  form.append("file", file);
+  form.append("api_key", sig.apiKey);
+  form.append("timestamp", String(sig.timestamp));
+  form.append("signature", sig.signature);
+  form.append("folder", sig.folder);
+  form.append("public_id", sig.publicId);
+  form.append("tags", sig.tags);
 
-    if (!cloudRes.ok || !cloudData.secure_url) {
-      throw new Error(cloudData.error?.message || "Cloudinary upload failed.");
-    }
+  const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, {
+    method: "POST",
+    body: form,
+  });
+  const cloudData = (await cloudRes.json().catch(() => ({}))) as {
+    secure_url?: string;
+    public_id?: string;
+    width?: number;
+    height?: number;
+    bytes?: number;
+    error?: { message?: string };
+  };
 
-    const regRes = await fetch("/api/admin/media", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: sig.id,
-        url: cloudData.secure_url,
-        filename: `${sig.id}.webp`,
-        width: cloudData.width ?? 0,
-        height: cloudData.height ?? 0,
-        bytes: cloudData.bytes ?? file.size,
-        publicId: cloudData.public_id ?? sig.publicId,
-      }),
-    });
-    const regData = (await regRes.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
-    if (!regRes.ok || !regData.media) {
-      throw new Error(regData.error || "Uploaded to Cloudinary, but failed to save to library.");
-    }
-    return regData.media;
+  if (!cloudRes.ok || !cloudData.secure_url) {
+    throw new Error(cloudData.error?.message || `Cloudinary rejected upload (HTTP ${cloudRes.status}).`);
   }
 
-  // 2. Fallback: server upload via FormData
+  const regRes = await fetch("/api/admin/media", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: sig.id,
+      url: cloudData.secure_url,
+      filename: `${sig.id}.webp`,
+      width: cloudData.width ?? 0,
+      height: cloudData.height ?? 0,
+      bytes: cloudData.bytes ?? file.size,
+      publicId: cloudData.public_id ?? sig.publicId,
+    }),
+  });
+  const regData = (await regRes.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
+  if (!regRes.ok || !regData.media) {
+    // Still return the Cloudinary asset even if library index write failed, or throw if session expired
+    if (regRes.status === 401) throw new Error("Your admin session expired. Please sign in again.");
+    return {
+      id: sig.id,
+      url: cloudData.secure_url,
+      filename: `${sig.id}.webp`,
+      width: cloudData.width ?? 0,
+      height: cloudData.height ?? 0,
+      bytes: cloudData.bytes ?? file.size,
+      createdAt: new Date().toISOString(),
+      storage: "cloudinary",
+      publicId: cloudData.public_id ?? sig.publicId,
+    };
+  }
+  return regData.media;
+}
+
+export async function uploadAdminImage(rawFile: File): Promise<MediaItem> {
+  const file = await optimizeDslrImage(rawFile);
+
+  // 1. Try direct browser -> Cloudinary upload first (bypasses server body limits)
+  let directError: string | null = null;
+  try {
+    const direct = await tryDirectCloudinaryUpload(file);
+    if (direct) return direct;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Direct upload failed";
+    if (msg.includes("session expired")) throw err;
+    directError = msg;
+    console.warn("[upload] Direct Cloudinary upload failed, falling back to server:", msg);
+  }
+
+  // 2. Fallback: upload through server route (supports up to 20MB, handles Cloudinary via server SDK)
   const body = new FormData();
   body.append("file", file);
   const res = await fetch("/api/admin/media", { method: "POST", body });
   const data = (await res.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
   if (!res.ok || !data.media) {
-    throw new Error(data.error || `Upload failed (HTTP ${res.status}).`);
+    throw new Error(data.error || directError || `Upload failed (HTTP ${res.status}).`);
   }
   return data.media;
 }
