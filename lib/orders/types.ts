@@ -29,6 +29,7 @@ export type OrderTrackingEvent = {
   eventTime?: number;
   sentAt?: string;
   createdAt: string;
+  isTest?: boolean;
 };
 
 export type OrderItem = {
@@ -82,6 +83,8 @@ export type AdminOrder = {
   confirmedAt?: string;
   deliveredAt?: string;
   paidAt?: string;
+  /** Admin-controlled flag excluding test orders from operational KPIs & future CAPI sends */
+  isTest: boolean;
   /** Server-side Meta CAPI delivery log persisted in Neon */
   trackingEvents?: OrderTrackingEvent[];
   createdAt: string;

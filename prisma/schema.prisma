@@ -180,6 +180,9 @@ model Order {
   deliveredAt      DateTime?
   paidAt           DateTime?
 
+  // Admin-controlled flag to keep test orders & tracking logs without inflating KPIs
+  isTest           Boolean       @default(false)
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -191,6 +194,7 @@ model Order {
   @@index([customerPhone])
   @@index([status])
   @@index([paymentStatus])
+  @@index([isTest])
   @@index([createdAt])
   @@index([idempotencyKey])
   @@map("orders")

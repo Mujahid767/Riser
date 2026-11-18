@@ -46,6 +46,7 @@ type TrackingRow = {
   nextRetryAt: Date | null;
   sentAt: Date | null;
   createdAt: Date;
+  order?: { isTest: boolean } | null;
 };
 
 export type CapiFailureSummary = {
@@ -94,6 +95,9 @@ export function isOrderEligibleForEvent(
   order: AdminOrder,
   eventName: OrderTrackingEventName
 ): boolean {
+  if (order.isTest) {
+    return false;
+  }
   if (eventName === "CODOrderPlaced") {
     return true;
   }
@@ -217,6 +221,7 @@ function toOrderTrackingEvent(row: TrackingRow): OrderTrackingEvent {
     eventTime: row.eventTime ?? undefined,
     sentAt: row.sentAt?.toISOString(),
     createdAt: row.createdAt.toISOString(),
+    ...(row.order ? { isTest: row.order.isTest } : {}),
   };
 }
 
@@ -391,6 +396,12 @@ export async function retryTrackingEventById(
 
   const order = await getOrder(row.orderId);
   if (!order) return { ok: false, error: "Associated order no longer exists." };
+  if (order.isTest) {
+    return {
+      ok: false,
+      error: `Order ${order.orderNumber} is marked as a test order; future Meta CAPI sends are blocked while preserving its ledger history.`,
+    };
+  }
 
   const eventName = row.eventName as OrderTrackingEventName;
   if (!isOrderEligibleForEvent(order, eventName)) {
@@ -434,6 +445,7 @@ export async function processDueTrackingRetries(limit = 20): Promise<{
 
     const dueRows = await prisma.trackingEvent.findMany({
       where: {
+        order: { isTest: false },
         OR: [
           {
             status: "FAILED",
@@ -496,7 +508,9 @@ export async function processDueTrackingRetries(limit = 20): Promise<{
           where: { id: row.id },
           data: {
             nextRetryAt: null,
-            lastError: `Paused automatic retries: order is ${order.status} / ${order.paymentStatus}.`,
+            lastError: order.isTest
+              ? "Paused automatic retries: order is marked as test."
+              : `Paused automatic retries: order is ${order.status} / ${order.paymentStatus}.`,
           },
         });
         skipped++;
@@ -526,7 +540,7 @@ export async function retryAllFailedTrackingEvents(limit = 50): Promise<{
   expired: number;
 }> {
   const candidates = await prisma.trackingEvent.findMany({
-    where: { status: { in: ["FAILED", "PENDING"] } },
+    where: { status: { in: ["FAILED", "PENDING"] }, order: { isTest: false } },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
@@ -549,6 +563,7 @@ export async function getCapiFailureSummary(): Promise<CapiFailureSummary> {
   const [exhaustedRows, retryingCount, expiredCount, exhaustedCount] = await Promise.all([
     prisma.trackingEvent.findMany({
       where: {
+        order: { isTest: false },
         status: "FAILED",
         OR: [{ attempts: { gte: MAX_CAPI_ATTEMPTS } }, { nextRetryAt: null }],
       },
@@ -566,14 +581,16 @@ export async function getCapiFailureSummary(): Promise<CapiFailureSummary> {
     }),
     prisma.trackingEvent.count({
       where: {
+        order: { isTest: false },
         status: "FAILED",
         attempts: { lt: MAX_CAPI_ATTEMPTS },
         nextRetryAt: { not: null },
       },
     }),
-    prisma.trackingEvent.count({ where: { status: "EXPIRED" } }),
+    prisma.trackingEvent.count({ where: { order: { isTest: false }, status: "EXPIRED" } }),
     prisma.trackingEvent.count({
       where: {
+        order: { isTest: false },
         status: "FAILED",
         OR: [{ attempts: { gte: MAX_CAPI_ATTEMPTS } }, { nextRetryAt: null }],
       },
@@ -605,9 +622,11 @@ export async function listRecentTrackingEvents(limit = 50): Promise<{
     prisma.trackingEvent.findMany({
       orderBy: { createdAt: "desc" },
       take: limit,
+      include: { order: { select: { isTest: true } } },
     }),
     prisma.trackingEvent.groupBy({
       by: ["status"],
+      where: { order: { isTest: false } },
       _count: { _all: true },
     }),
     getCapiFailureSummary(),

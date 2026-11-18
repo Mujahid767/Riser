@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AdminOrder, OrderStatus, OrderTrackingEventName, PaymentStatus } from "@/lib/orders/types";
 import { ORDER_STATUSES, STATUS_LABELS, STATUS_COLORS } from "@/lib/orders/types";
-import { ArrowLeft, Package, Truck, Radio, RefreshCw } from "lucide-react";
+import { ArrowLeft, Package, Truck, Radio, RefreshCw, FlaskConical } from "lucide-react";
 
 const inputClass = "w-full bg-black/40 border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-white/50";
 
@@ -23,6 +23,27 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
   const [courierError, setCourierError] = useState("");
   const [retryingEventId, setRetryingEventId] = useState<string | null>(null);
   const [retryMsg, setRetryMsg] = useState("");
+  const [togglingTest, setTogglingTest] = useState(false);
+
+  async function toggleTestFlag(nextIsTest: boolean) {
+    setTogglingTest(true);
+    setError("");
+    setSaved(false);
+    const res = await fetch(`/api/admin/orders?id=${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isTest: nextIsTest }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string; order?: AdminOrder };
+    setTogglingTest(false);
+    if (!res.ok || !data.order) {
+      setError(data.error ?? "Could not update test classification.");
+      return;
+    }
+    setOrder(data.order);
+    setSaved(true);
+    router.refresh();
+  }
 
   async function retryTracking(eventIdRecord: string) {
     setRetryingEventId(eventIdRecord);
@@ -91,6 +112,29 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
     PARTIALLY_REFUNDED: "Partially Refunded",
   };
 
+  const isRealized =
+    !order.isTest && order.status === "DELIVERED" && order.paymentStatus === "PAID";
+
+  const settlementTimestamp = (() => {
+    if (!isRealized) return null;
+    const updatedMs = new Date(order.updatedAt).getTime();
+    const dMs = order.deliveredAt ? new Date(order.deliveredAt).getTime() : updatedMs;
+    const pMs = order.paidAt ? new Date(order.paidAt).getTime() : updatedMs;
+    return new Date(Math.max(dMs, pMs));
+  })();
+
+  const accountingStatusLabel = order.isTest
+    ? "Excluded (Test order)"
+    : isRealized
+      ? "Realized Revenue"
+      : order.paymentStatus === "REFUNDED" || order.paymentStatus === "PARTIALLY_REFUNDED"
+        ? "Excluded (Refunded)"
+        : order.status === "CANCELLED" || order.status === "RETURNED"
+          ? `Excluded (${STATUS_LABELS[order.status]})`
+          : order.paymentStatus === "PENDING"
+            ? "Excluded (Unpaid COD)"
+            : `Excluded (${STATUS_LABELS[order.status]})`;
+
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Header */}
@@ -100,16 +144,56 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-white font-mono">{order.orderNumber}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold text-white font-mono">{order.orderNumber}</h1>
+              {order.isTest && (
+                <span className="px-2 py-0.5 text-[11px] font-mono font-bold uppercase bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                  TEST ORDER
+                </span>
+              )}
+            </div>
             <p className="text-neutral-500 text-sm mt-0.5">
               Placed {new Date(order.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
             </p>
           </div>
         </div>
-        <span className={`text-sm font-semibold px-3 py-1.5 self-start ${STATUS_COLORS[order.status]}`}>
-          {STATUS_LABELS[order.status]}
-        </span>
+        <div className="flex flex-wrap items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={() => void toggleTestFlag(!order.isTest)}
+            disabled={togglingTest}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono uppercase tracking-wider border transition-colors disabled:opacity-50 ${
+              order.isTest
+                ? "border-purple-400/50 bg-purple-500/15 text-purple-200 hover:bg-purple-500/25"
+                : "border-white/20 text-neutral-300 hover:border-white hover:text-white"
+            }`}
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+            {togglingTest
+              ? "Updating…"
+              : order.isTest
+                ? "Restore as Live Order"
+                : "Mark as Test Order"}
+          </button>
+          <span className={`text-sm font-semibold px-3 py-1.5 ${STATUS_COLORS[order.status]}`}>
+            {STATUS_LABELS[order.status]}
+          </span>
+        </div>
       </div>
+
+      {order.isTest && (
+        <div className="text-purple-200 text-sm border border-purple-500/40 bg-purple-500/10 px-4 py-3 space-y-1">
+          <p className="font-semibold">
+            Test order active — excluded from all revenue, placed-order totals, and operational KPIs.
+          </p>
+          <p className="text-xs text-purple-300/90">
+            Existing tracking history stays preserved in Neon, and future Meta CAPI sends &amp; retries are blocked.
+            {order.status !== "CANCELLED"
+              ? " If this test order reserved live stock, change its Order status to Cancelled to return units to inventory."
+              : ""}
+          </p>
+        </div>
+      )}
 
       {order.flags?.includes("repeat_phone_24h") && (
         <p className="text-amber-400 text-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3">
@@ -219,6 +303,12 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
               </div>
             </div>
 
+            {order.isTest && (
+              <p className="text-xs text-purple-300 bg-purple-500/10 border border-purple-500/30 px-3 py-2">
+                Marked as Test Order — ledger history is preserved, while new Meta CAPI events and manual/automatic retries are disabled.
+              </p>
+            )}
+
             {retryMsg && (
               <p className={`text-xs ${retryMsg.includes("sent") ? "text-emerald-400" : "text-red-400"}`}>
                 {retryMsg}
@@ -290,7 +380,7 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
                         <p className="text-[11px] text-red-400 mt-1">{ev.lastError}</p>
                       )}
                     </div>
-                    {ev && ev.status !== "SENT" && ev.status !== "EXPIRED" && (
+                    {!order.isTest && ev && ev.status !== "SENT" && ev.status !== "EXPIRED" && (
                       <button
                         type="button"
                         onClick={() => void retryTracking(ev.id)}
@@ -411,13 +501,43 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
           </section>
 
           <section className="bg-admin-card border border-admin-border p-5 space-y-2">
-            <h2 className="text-white font-semibold text-sm uppercase tracking-wider mb-3">Payment</h2>
+            <h2 className="text-white font-semibold text-sm uppercase tracking-wider mb-3">Payment &amp; Accounting</h2>
             <div className="text-sm grid grid-cols-2 gap-y-2">
               <span className="text-neutral-500">Method</span>
               <span className="text-white">{order.paymentMethod}</span>
-              <span className="text-neutral-500">Status</span>
-              <span className={`font-semibold ${order.paymentStatus === "PAID" ? "text-emerald-400" : "text-amber-400"}`}>
+              <span className="text-neutral-500">Payment status</span>
+              <span
+                className={`font-semibold ${
+                  order.paymentStatus === "PAID"
+                    ? "text-emerald-400"
+                    : order.paymentStatus === "REFUNDED" || order.paymentStatus === "PARTIALLY_REFUNDED"
+                      ? "text-rose-400"
+                      : "text-amber-400"
+                }`}
+              >
                 {paymentLabel[order.paymentStatus]}
+              </span>
+              <span className="text-neutral-500">Revenue accounting</span>
+              <span className={`font-semibold ${isRealized ? "text-emerald-400" : "text-neutral-300"}`}>
+                {accountingStatusLabel}
+              </span>
+              {settlementTimestamp && (
+                <>
+                  <span className="text-neutral-500">Settlement date</span>
+                  <span className="text-white font-mono text-xs self-center">
+                    {settlementTimestamp.toLocaleString("en-GB", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </>
+              )}
+              <span className="text-neutral-500">Classification</span>
+              <span className={`font-mono text-xs self-center ${order.isTest ? "text-purple-300" : "text-neutral-300"}`}>
+                {order.isTest ? "TEST ORDER" : "LIVE ORDER"}
               </span>
             </div>
           </section>

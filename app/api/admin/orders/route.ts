@@ -14,7 +14,7 @@ const VALID_PAYMENT_STATUSES: PaymentStatus[] = [
   "PARTIALLY_REFUNDED",
 ];
 
-// GET /api/admin/orders?id=&status=&search=&limit=&offset=
+// GET /api/admin/orders?id=&status=&isTest=&search=&limit=&offset=
 export async function GET(request: Request) {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
@@ -28,14 +28,51 @@ export async function GET(request: Request) {
     return NextResponse.json({ order });
   }
 
+  const isTestParam = searchParams.get("isTest");
+  const isTest =
+    isTestParam === "true" ? true : isTestParam === "false" ? false : undefined;
+
   const result = await listOrders({
     status: (searchParams.get("status") as OrderStatus) || undefined,
     search: searchParams.get("search") || undefined,
+    isTest,
     limit: searchParams.get("limit") ? Number(searchParams.get("limit")) : 50,
     offset: searchParams.get("offset") ? Number(searchParams.get("offset")) : 0,
   });
 
   return NextResponse.json(result);
+}
+
+// PATCH /api/admin/orders?id=xxx — toggle admin-controlled isTest flag (preserves order & tracking ledger)
+export async function PATCH(request: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const { searchParams } = new URL(request.url);
+  const body = (await request.json().catch(() => null)) as {
+    id?: string;
+    isTest?: unknown;
+  } | null;
+
+  const id = searchParams.get("id") || (typeof body?.id === "string" ? body.id.trim() : "");
+  if (!id) return NextResponse.json({ error: "Missing id." }, { status: 400 });
+
+  if (!body || typeof body.isTest !== "boolean") {
+    return NextResponse.json(
+      { error: "Request body must specify boolean `isTest`." },
+      { status: 400 }
+    );
+  }
+
+  const result = await updateOrderAtomic(id, { isTest: body.isTest });
+  if (result.kind === "not_found") {
+    return NextResponse.json({ error: "Order not found." }, { status: 404 });
+  }
+  if (result.kind === "cannot_reopen") {
+    return NextResponse.json({ error: "Cannot reopen cancelled order." }, { status: 400 });
+  }
+
+  return NextResponse.json({ order: result.order });
 }
 
 // PUT /api/admin/orders?id=xxx — update status/tracking & trigger verified CAPI funnel events
@@ -52,15 +89,19 @@ export async function PUT(request: Request) {
     paymentStatus?: PaymentStatus;
     trackingNumber?: string;
     note?: string;
+    isTest?: boolean;
   } | null;
 
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
 
-  if (body.status && !ORDER_STATUSES.includes(body.status)) {
+  if (body.status !== undefined && !ORDER_STATUSES.includes(body.status)) {
     return NextResponse.json({ error: "Invalid order status." }, { status: 400 });
   }
-  if (body.paymentStatus && !VALID_PAYMENT_STATUSES.includes(body.paymentStatus)) {
+  if (body.paymentStatus !== undefined && !VALID_PAYMENT_STATUSES.includes(body.paymentStatus)) {
     return NextResponse.json({ error: "Invalid payment status." }, { status: 400 });
+  }
+  if (body.isTest !== undefined && typeof body.isTest !== "boolean") {
+    return NextResponse.json({ error: "Invalid isTest flag." }, { status: 400 });
   }
 
   const result = await updateOrderAtomic(id, body);
@@ -75,20 +116,23 @@ export async function PUT(request: Request) {
   }
   const { order } = result;
 
-  // Stage 2: Confirmed by phone → QualifiedOrder (action_source: "phone_call", no admin URL)
-  // Uses confirmedAt or current CONFIRMED status so later retries remain eligible after shipping.
-  if (
-    (order.status === "CONFIRMED" || Boolean(order.confirmedAt)) &&
-    order.status !== "CANCELLED" &&
-    order.status !== "RETURNED"
-  ) {
-    await dispatchOrderTrackingEvent(order, "QualifiedOrder");
-  }
+  // Test orders are excluded from all future Meta CAPI dispatches while keeping ledger history intact
+  if (!order.isTest) {
+    // Stage 2: Confirmed by phone → QualifiedOrder (action_source: "phone_call", no admin URL)
+    // Uses confirmedAt or current CONFIRMED status so later retries remain eligible after shipping.
+    if (
+      (order.status === "CONFIRMED" || Boolean(order.confirmedAt)) &&
+      order.status !== "CANCELLED" &&
+      order.status !== "RETURNED"
+    ) {
+      await dispatchOrderTrackingEvent(order, "QualifiedOrder");
+    }
 
-  // Stage 3: Purchase ONLY when BOTH status === DELIVERED AND paymentStatus === PAID
-  // Uses action_source: "system_generated" without admin dashboard URL or staff browser headers.
-  if (order.status === "DELIVERED" && order.paymentStatus === "PAID") {
-    await dispatchOrderTrackingEvent(order, "Purchase");
+    // Stage 3: Purchase ONLY when BOTH status === DELIVERED AND paymentStatus === PAID
+    // Uses action_source: "system_generated" without admin dashboard URL or staff browser headers.
+    if (order.status === "DELIVERED" && order.paymentStatus === "PAID") {
+      await dispatchOrderTrackingEvent(order, "Purchase");
+    }
   }
 
   // Re-fetch with latest trackingEvents so the admin UI displays updated delivery state

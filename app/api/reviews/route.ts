@@ -78,6 +78,7 @@ export async function POST(request: Request) {
     const matchedOrder = await prisma.order.findFirst({
       where: {
         id: parsed.data.orderId,
+        isTest: false,
         items: { some: { productId: product.id } },
       },
       select: { id: true },

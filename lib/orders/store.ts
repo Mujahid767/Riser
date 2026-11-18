@@ -50,6 +50,7 @@ type DbOrder = {
   confirmedAt: Date | null;
   deliveredAt: Date | null;
   paidAt: Date | null;
+  isTest: boolean;
   createdAt: Date;
   updatedAt: Date;
   items: {
@@ -125,6 +126,7 @@ function toAdminOrder(row: DbOrder): AdminOrder {
     confirmedAt: row.confirmedAt?.toISOString(),
     deliveredAt: row.deliveredAt?.toISOString(),
     paidAt: row.paidAt?.toISOString(),
+    isTest: row.isTest,
     trackingEvents: row.trackingEvents?.map((te) => ({
       id: te.id,
       orderId: te.orderId,
@@ -196,11 +198,13 @@ export async function findOrderByIdempotencyKey(
 export async function listOrders(opts?: {
   status?: OrderStatus;
   search?: string;
+  isTest?: boolean;
   limit?: number;
   offset?: number;
 }): Promise<{ orders: AdminOrder[]; total: number }> {
   const where = {
     ...(opts?.status ? { status: opts.status as never } : {}),
+    ...(typeof opts?.isTest === "boolean" ? { isTest: opts.isTest } : {}),
     ...(opts?.search
       ? {
           OR: [
@@ -235,7 +239,9 @@ export async function getOrder(id: string): Promise<AdminOrder | null> {
 }
 
 export async function createOrder(
-  input: Omit<AdminOrder, "id" | "orderNumber" | "createdAt" | "updatedAt">
+  input: Omit<AdminOrder, "id" | "orderNumber" | "createdAt" | "updatedAt" | "isTest"> & {
+    isTest?: boolean;
+  }
 ): Promise<AdminOrder> {
   return prisma.$transaction(async (tx) => {
     const orderNumber = await nextOrderNumberTx(tx);
@@ -261,6 +267,7 @@ export async function createOrder(
         idempotencyKey: input.idempotencyKey ?? null,
         fbp: input.fbp ?? null,
         fbc: input.fbc ?? null,
+        isTest: Boolean(input.isTest),
         flags: (input.flags ?? []) as never,
         items: {
           create: input.items.map((i) => ({
@@ -293,7 +300,7 @@ export type AtomicOrderUpdateResult =
  */
 export async function updateOrderAtomic(
   id: string,
-  input: Partial<Pick<AdminOrder, "status" | "paymentStatus" | "trackingNumber" | "note">>
+  input: Partial<Pick<AdminOrder, "status" | "paymentStatus" | "trackingNumber" | "note" | "isTest">>
 ): Promise<AtomicOrderUpdateResult> {
   return prisma.$transaction(
     async (tx) => {
@@ -326,6 +333,7 @@ export async function updateOrderAtomic(
           ? { trackingNumber: input.trackingNumber ?? null }
           : {}),
         ...(input.note !== undefined ? { adminNotes: input.note ?? null } : {}),
+        ...(typeof input.isTest === "boolean" ? { isTest: input.isTest } : {}),
         ...(nextStatus === "CONFIRMED" && !existing.confirmedAt
           ? { confirmedAt: now }
           : {}),
@@ -366,6 +374,17 @@ export async function updateOrderAtomic(
         data: updateData,
         include: { items: true, trackingEvents: { orderBy: { createdAt: "asc" } } },
       });
+      if (input.isTest === true) {
+        await tx.trackingEvent.updateMany({
+          where: { orderId: id, status: { in: ["FAILED", "PENDING"] } },
+          data: { nextRetryAt: null },
+        });
+        const refreshed = await tx.order.findUniqueOrThrow({
+          where: { id },
+          include: { items: true, trackingEvents: { orderBy: { createdAt: "asc" } } },
+        });
+        return { kind: "ok", order: toAdminOrder(refreshed), cancelledNow: false };
+      }
       return { kind: "ok", order: toAdminOrder(row), cancelledNow: false };
     },
     { maxWait: 10_000, timeout: 20_000 }
@@ -374,7 +393,7 @@ export async function updateOrderAtomic(
 
 export async function updateOrder(
   id: string,
-  input: Partial<Pick<AdminOrder, "status" | "paymentStatus" | "trackingNumber" | "note">>
+  input: Partial<Pick<AdminOrder, "status" | "paymentStatus" | "trackingNumber" | "note" | "isTest">>
 ): Promise<AdminOrder | null> {
   const res = await updateOrderAtomic(id, input);
   return res.kind === "ok" ? res.order : null;
@@ -431,7 +450,9 @@ export type AtomicCreateOrderResult =
  * and 4) sequential order number allocation via `order_counters`.
  */
 export async function createOrderAtomic(
-  input: Omit<AdminOrder, "id" | "orderNumber" | "createdAt" | "updatedAt" | "flags">,
+  input: Omit<AdminOrder, "id" | "orderNumber" | "createdAt" | "updatedAt" | "flags" | "isTest"> & {
+    isTest?: boolean;
+  },
   idempotencyKey: string,
   opts?: {
     stockRequests?: StockRequest[];
@@ -443,6 +464,7 @@ export async function createOrderAtomic(
   const repeat = await prisma.order.findFirst({
     where: {
       customerPhone: input.customerPhone,
+      isTest: false,
       status: { not: "CANCELLED" as never },
       createdAt: { gt: dayAgo },
     },
@@ -503,6 +525,7 @@ export async function createOrderAtomic(
             idempotencyKey,
             fbp: input.fbp ?? null,
             fbc: input.fbc ?? null,
+            isTest: Boolean(input.isTest),
             flags: flags as never,
             items: {
               create: input.items.map((i) => ({

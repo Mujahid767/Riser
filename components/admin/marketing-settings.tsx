@@ -556,6 +556,11 @@ export default function MarketingSettingsClient({
                       <Link href={`/admin/orders/${ev.orderId}`} className="hover:underline">
                         {ev.orderNumber}
                       </Link>
+                      {ev.isTest && (
+                        <span className="ml-2 px-1.5 py-0.5 text-[9px] font-mono uppercase bg-purple-500/20 text-purple-300">
+                          TEST
+                        </span>
+                      )}
                     </td>
                     <td className="py-2.5 pr-3 font-mono text-neutral-200">{ev.eventName}</td>
                     <td className="py-2.5 pr-3 font-mono text-neutral-400">{ev.eventId}</td>
@@ -587,7 +592,7 @@ export default function MarketingSettingsClient({
                       )}
                     </td>
                     <td className="py-2.5 text-right">
-                      {ev.status !== "SENT" && ev.status !== "EXPIRED" && (
+                      {!ev.isTest && ev.status !== "SENT" && ev.status !== "EXPIRED" && (
                         <button
                           type="button"
                           onClick={() => void handleRetrySingle(ev.id)}

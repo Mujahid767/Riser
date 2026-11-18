@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { AdminOrder, OrderStatus } from "@/lib/orders/types";
 import { ORDER_STATUSES, STATUS_LABELS, STATUS_COLORS } from "@/lib/orders/types";
@@ -9,29 +9,43 @@ import { Search, ShoppingBag } from "lucide-react";
 export default function OrderList() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
+  const [testFilter, setTestFilter] = useState<"" | "false" | "true">("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [loadedKey, setLoadedKey] = useState<string>("");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
+  const queryKey = `${statusFilter}|${testFilter}|${debouncedSearch}`;
+  const loading = loadedKey !== queryKey;
+
+  useEffect(() => {
+    let cancelled = false;
     const params = new URLSearchParams();
     if (statusFilter) params.set("status", statusFilter);
+    if (testFilter) params.set("isTest", testFilter);
     if (debouncedSearch) params.set("search", debouncedSearch);
-    const res = await fetch(`/api/admin/orders?${params.toString()}`);
-    const data = (await res.json().catch(() => ({}))) as { orders?: AdminOrder[]; total?: number };
-    setOrders(data.orders ?? []);
-    setTotal(data.total ?? 0);
-    setLoading(false);
-  }, [statusFilter, debouncedSearch]);
 
-  useEffect(() => { void fetchOrders(); }, [fetchOrders]);
+    fetch(`/api/admin/orders?${params.toString()}`)
+      .then((res) => res.json().catch(() => ({})))
+      .then((data: { orders?: AdminOrder[]; total?: number }) => {
+        if (cancelled) return;
+        setOrders(data.orders ?? []);
+        setTotal(data.total ?? 0);
+        setLoadedKey(queryKey);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadedKey(queryKey);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [statusFilter, testFilter, debouncedSearch, queryKey]);
 
   return (
     <div className="space-y-6">
@@ -62,6 +76,15 @@ export default function OrderList() {
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
           ))}
         </select>
+        <select
+          value={testFilter}
+          onChange={(e) => setTestFilter(e.target.value as "" | "false" | "true")}
+          className="bg-admin-card border border-admin-border px-4 py-2.5 text-sm text-white outline-none"
+        >
+          <option value="">Live + Test</option>
+          <option value="false">Live orders only</option>
+          <option value="true">Test orders only</option>
+        </select>
       </div>
 
       {/* Table */}
@@ -90,9 +113,16 @@ export default function OrderList() {
                 {orders.map((order) => (
                   <tr key={order.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="px-5 py-3">
-                      <Link href={`/admin/orders/${order.id}`} className="text-sm font-mono text-brand-400 hover:text-brand-300">
-                        {order.orderNumber}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/admin/orders/${order.id}`} className="text-sm font-mono text-brand-400 hover:text-brand-300">
+                          {order.orderNumber}
+                        </Link>
+                        {order.isTest && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-mono uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                            TEST
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3">
                       <p className="text-sm text-white font-medium">{order.customerName}</p>
@@ -101,7 +131,17 @@ export default function OrderList() {
                     <td className="px-5 py-3 text-sm text-neutral-400">{order.items.length} item{order.items.length !== 1 ? "s" : ""}</td>
                     <td className="px-5 py-3 text-sm font-semibold text-white">৳{order.total.toLocaleString()}</td>
                     <td className="px-5 py-3">
-                      <span className={`text-xs font-semibold px-2 py-1 ${order.paymentStatus === "PAID" ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>
+                      <span
+                        className={`text-xs font-semibold px-2 py-1 ${
+                          order.paymentStatus === "PAID"
+                            ? "bg-emerald-500/15 text-emerald-400"
+                            : order.paymentStatus === "REFUNDED" || order.paymentStatus === "PARTIALLY_REFUNDED"
+                              ? "bg-rose-500/15 text-rose-400"
+                              : order.paymentStatus === "FAILED"
+                                ? "bg-red-500/15 text-red-400"
+                                : "bg-amber-500/15 text-amber-400"
+                        }`}
+                      >
                         {order.paymentStatus}
                       </span>
                     </td>
