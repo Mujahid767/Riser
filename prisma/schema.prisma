@@ -169,6 +169,15 @@ model Order {
   // JSON array of flag strings, e.g. ["repeat_phone_24h"]
   flags            Json          @default("[]")
 
+  // Meta browser/click IDs captured at checkout when present (unhashed)
+  fbp              String?
+  fbc              String?
+
+  // Verified milestone timestamps for historical CAPI retries & original event_time
+  confirmedAt      DateTime?
+  deliveredAt      DateTime?
+  paidAt           DateTime?
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -213,6 +222,7 @@ enum TrackingEventStatus {
   PENDING
   SENT
   FAILED
+  EXPIRED
 }
 
 model TrackingEvent {
@@ -221,11 +231,13 @@ model TrackingEvent {
   orderNumber   String
   eventName     String              // "CODOrderPlaced" | "QualifiedOrder" | "Purchase"
   eventId       String              // Stable deduplication ID, e.g. "pur-RIS-2026-000001"
+  eventTime     Int?                // Original Unix seconds when the business event occurred
   status        TrackingEventStatus @default(PENDING)
   attempts      Int                 @default(0)
   lastError     String?
   payload       Json?
   lastAttemptAt DateTime?
+  nextRetryAt   DateTime?
   sentAt        DateTime?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
@@ -233,7 +245,7 @@ model TrackingEvent {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@unique([orderId, eventName])
-  @@index([status])
+  @@index([status, nextRetryAt])
   @@index([createdAt])
   @@map("tracking_events")
 }

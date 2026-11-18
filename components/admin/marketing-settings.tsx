@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   TrendingUp,
   Copy,
@@ -14,13 +15,16 @@ import {
   Share2,
   Sparkles,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import type { MarketingSettingsView } from "@/lib/marketing/settings";
 import type { OrderTrackingEvent } from "@/lib/orders/types";
+import type { CapiFailureSummary } from "@/lib/analytics/order-tracking";
 
 type LedgerData = {
   events: OrderTrackingEvent[];
-  counts: { sent: number; failed: number; pending: number };
+  counts: { sent: number; failed: number; pending: number; expired?: number };
+  summary?: CapiFailureSummary;
 };
 
 const inputClass =
@@ -479,10 +483,13 @@ export default function MarketingSettingsClient({
               Every order event is locked once per order to prevent duplicates. Failed deliveries can be retried safely with the same event ID.
             </p>
           </div>
-          <div className="flex items-center gap-3 text-xs font-mono">
+          <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
             <span className="text-emerald-400">Sent: {ledger.counts.sent}</span>
             <span className="text-red-400">Failed: {ledger.counts.failed}</span>
             <span className="text-amber-400">Pending: {ledger.counts.pending}</span>
+            {(ledger.counts.expired ?? 0) > 0 && (
+              <span className="text-neutral-400">Expired: {ledger.counts.expired}</span>
+            )}
             {ledger.counts.failed + ledger.counts.pending > 0 && (
               <button
                 type="button"
@@ -496,6 +503,32 @@ export default function MarketingSettingsClient({
             )}
           </div>
         </div>
+
+        {ledger.summary && ledger.summary.exhaustedCount > 0 && (
+          <div className="bg-red-500/10 border border-red-500/30 p-3.5 text-xs space-y-2">
+            <div className="flex items-center gap-2 text-red-300 font-semibold">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>
+                {ledger.summary.exhaustedCount} CAPI event{ledger.summary.exhaustedCount > 1 ? "s" : ""} exhausted automatic retries
+              </span>
+            </div>
+            <p className="text-neutral-300 text-[11px]">
+              Verify your Meta Pixel ID and Conversions API Token above, then click &ldquo;Retry Failed&rdquo; (events older than 7 days expire per Meta&apos;s limit).
+            </p>
+            {ledger.summary.recentExhausted.length > 0 && (
+              <ul className="space-y-1 text-[11px] font-mono text-red-200/90">
+                {ledger.summary.recentExhausted.map((item) => (
+                  <li key={item.id}>
+                    <Link href={`/admin/orders/${item.orderId}`} className="underline hover:text-white">
+                      {item.orderNumber}
+                    </Link>{" "}
+                    · {item.eventName} ({item.attempts}x) — {item.lastError ?? "Delivery failed"}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {ledger.events.length === 0 ? (
           <p className="text-xs text-neutral-500 py-4">
@@ -518,7 +551,11 @@ export default function MarketingSettingsClient({
               <tbody className="divide-y divide-white/5">
                 {ledger.events.map((ev) => (
                   <tr key={ev.id}>
-                    <td className="py-2.5 pr-3 font-mono text-white">{ev.orderNumber}</td>
+                    <td className="py-2.5 pr-3 font-mono text-white">
+                      <Link href={`/admin/orders/${ev.orderId}`} className="hover:underline">
+                        {ev.orderNumber}
+                      </Link>
+                    </td>
                     <td className="py-2.5 pr-3 font-mono text-neutral-200">{ev.eventName}</td>
                     <td className="py-2.5 pr-3 font-mono text-neutral-400">{ev.eventId}</td>
                     <td className="py-2.5 pr-3">
@@ -528,7 +565,9 @@ export default function MarketingSettingsClient({
                             ? "bg-emerald-500/15 text-emerald-400"
                             : ev.status === "FAILED"
                               ? "bg-red-500/15 text-red-400"
-                              : "bg-amber-500/15 text-amber-400"
+                              : ev.status === "EXPIRED"
+                                ? "bg-neutral-500/20 text-neutral-300"
+                                : "bg-amber-500/15 text-amber-400"
                         }`}
                       >
                         {ev.status}
@@ -536,10 +575,18 @@ export default function MarketingSettingsClient({
                     </td>
                     <td className="py-2.5 pr-3 font-mono text-neutral-400">{ev.attempts}</td>
                     <td className="py-2.5 pr-3 text-neutral-400 max-w-xs truncate">
-                      {ev.lastError ? <span className="text-red-400">{ev.lastError}</span> : ev.sentAt ? new Date(ev.sentAt).toLocaleString("en-GB") : "Pending"}
+                      {ev.lastError ? (
+                        <span className={ev.status === "EXPIRED" ? "text-neutral-300" : "text-red-400"}>
+                          {ev.lastError}
+                        </span>
+                      ) : ev.sentAt ? (
+                        new Date(ev.sentAt).toLocaleString("en-GB")
+                      ) : (
+                        "Pending"
+                      )}
                     </td>
                     <td className="py-2.5 text-right">
-                      {ev.status !== "SENT" && (
+                      {ev.status !== "SENT" && ev.status !== "EXPIRED" && (
                         <button
                           type="button"
                           onClick={() => void handleRetrySingle(ev.id)}

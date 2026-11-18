@@ -83,18 +83,20 @@ export async function PUT(request: Request) {
     await releaseStock(order.items.map((i) => ({ productId: i.productId, qty: i.qty })));
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd";
-  const eventSourceUrl = `${siteUrl}/admin/orders/${order.id}`;
-
-  // Stage 2: CONFIRMED → QualifiedOrder (staff verified by phone; idempotent & persisted in Neon)
-  if (order.status === "CONFIRMED") {
-    await dispatchOrderTrackingEvent(order, "QualifiedOrder", { eventSourceUrl });
+  // Stage 2: Confirmed by phone → QualifiedOrder (action_source: "phone_call", no admin URL)
+  // Uses confirmedAt or current CONFIRMED status so later retries remain eligible after shipping.
+  if (
+    (order.status === "CONFIRMED" || Boolean(order.confirmedAt)) &&
+    order.status !== "CANCELLED" &&
+    order.status !== "RETURNED"
+  ) {
+    await dispatchOrderTrackingEvent(order, "QualifiedOrder");
   }
 
   // Stage 3: Purchase ONLY when BOTH status === DELIVERED AND paymentStatus === PAID
-  // Works regardless of whether DELIVERED or PAID was set last, and never repeats once SENT.
+  // Uses action_source: "system_generated" without admin dashboard URL or staff browser headers.
   if (order.status === "DELIVERED" && order.paymentStatus === "PAID") {
-    await dispatchOrderTrackingEvent(order, "Purchase", { eventSourceUrl });
+    await dispatchOrderTrackingEvent(order, "Purchase");
   }
 
   // Re-fetch with latest trackingEvents so the admin UI displays updated delivery state

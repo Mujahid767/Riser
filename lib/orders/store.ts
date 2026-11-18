@@ -38,6 +38,11 @@ type DbOrder = {
   courierSentAt: Date | null;
   idempotencyKey: string | null;
   flags: unknown;
+  fbp: string | null;
+  fbc: string | null;
+  confirmedAt: Date | null;
+  deliveredAt: Date | null;
+  paidAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   items: {
@@ -60,6 +65,8 @@ type DbOrder = {
     attempts: number;
     lastError: string | null;
     lastAttemptAt: Date | null;
+    nextRetryAt: Date | null;
+    eventTime: number | null;
     sentAt: Date | null;
     createdAt: Date;
   }[];
@@ -106,6 +113,11 @@ function toAdminOrder(row: DbOrder): AdminOrder {
         : undefined,
     idempotencyKey: row.idempotencyKey ?? undefined,
     flags,
+    fbp: row.fbp ?? undefined,
+    fbc: row.fbc ?? undefined,
+    confirmedAt: row.confirmedAt?.toISOString(),
+    deliveredAt: row.deliveredAt?.toISOString(),
+    paidAt: row.paidAt?.toISOString(),
     trackingEvents: row.trackingEvents?.map((te) => ({
       id: te.id,
       orderId: te.orderId,
@@ -116,6 +128,8 @@ function toAdminOrder(row: DbOrder): AdminOrder {
       attempts: te.attempts,
       lastError: te.lastError ?? undefined,
       lastAttemptAt: te.lastAttemptAt?.toISOString(),
+      nextRetryAt: te.nextRetryAt?.toISOString(),
+      eventTime: te.eventTime ?? undefined,
       sentAt: te.sentAt?.toISOString(),
       createdAt: te.createdAt.toISOString(),
     })),
@@ -209,6 +223,8 @@ export async function createOrder(
       adminNotes: input.note ?? null,
       trackingNumber: input.trackingNumber ?? null,
       idempotencyKey: input.idempotencyKey ?? null,
+      fbp: input.fbp ?? null,
+      fbc: input.fbc ?? null,
       flags: (input.flags ?? []) as never,
       items: {
         create: input.items.map((i) => ({
@@ -235,6 +251,10 @@ export async function updateOrder(
   const existing = await prisma.order.findUnique({ where: { id } });
   if (!existing) return null;
 
+  const now = new Date();
+  const nextStatus = input.status ?? existing.status;
+  const nextPaymentStatus = input.paymentStatus ?? existing.paymentStatus;
+
   const row = await prisma.order.update({
     where: { id },
     data: {
@@ -246,8 +266,19 @@ export async function updateOrder(
         ? { trackingNumber: input.trackingNumber ?? null }
         : {}),
       ...(input.note !== undefined ? { adminNotes: input.note ?? null } : {}),
+      // Preserve first phone verification time even if the order later advances to PACKED/SHIPPED
+      ...(nextStatus === "CONFIRMED" && !existing.confirmedAt
+        ? { confirmedAt: now }
+        : {}),
+      // Record transition into DELIVERED / PAID so CAPI retries preserve actual event_time
+      ...(nextStatus === "DELIVERED" && existing.status !== "DELIVERED"
+        ? { deliveredAt: now }
+        : {}),
+      ...(nextPaymentStatus === "PAID" && existing.paymentStatus !== "PAID"
+        ? { paidAt: now }
+        : {}),
     },
-    include: { items: true },
+    include: { items: true, trackingEvents: { orderBy: { createdAt: "asc" } } },
   });
   return toAdminOrder(row);
 }
@@ -340,6 +371,8 @@ export async function createOrderIdempotent(
       adminNotes: input.note ?? null,
       trackingNumber: input.trackingNumber ?? null,
       idempotencyKey,
+      fbp: input.fbp ?? null,
+      fbc: input.fbc ?? null,
       flags: flags as never,
       items: {
         create: input.items.map((i) => ({

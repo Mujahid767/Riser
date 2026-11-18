@@ -7,6 +7,7 @@ import {
 import { getAdminSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
+import { getCapiFailureSummary } from "@/lib/analytics/order-tracking";
 
 export const metadata: Metadata = {
   title: "Dashboard — Riser Admin",
@@ -47,6 +48,7 @@ async function getDashboardData() {
     productCount,
     recentOrders,
     lowStockProducts,
+    capiAlert,
   ] = await Promise.all([
     prisma.order.findMany({
       where: { createdAt: { gte: todayStart }, status: { not: "CANCELLED" } },
@@ -77,6 +79,7 @@ async function getDashboardData() {
       take: 5,
       select: { id: true, name: true, stock: true },
     }),
+    getCapiFailureSummary(),
   ]);
 
   const todayRevenue = todayOrders.reduce((s, o) => s + Number(o.totalAmount), 0);
@@ -94,6 +97,7 @@ async function getDashboardData() {
     productCount,
     recentOrders,
     lowStockProducts,
+    capiAlert,
   };
 }
 
@@ -102,7 +106,7 @@ export default async function AdminDashboard() {
   if (!session) redirect("/admin/login");
 
   const data = await getDashboardData();
-  const { todayRevenue, todayOrderCount, revenueChange, pendingCount, productCount, recentOrders, lowStockProducts } = data;
+  const { todayRevenue, todayOrderCount, revenueChange, pendingCount, productCount, recentOrders, lowStockProducts, capiAlert } = data;
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -155,6 +159,32 @@ export default async function AdminDashboard() {
           {greeting}! Here&apos;s what&apos;s happening at Riser today.
         </p>
       </div>
+
+      {/* Persistent Meta CAPI failure alert */}
+      {capiAlert.exhaustedCount > 0 && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-semibold text-red-300">
+                Meta CAPI Delivery Alert: {capiAlert.exhaustedCount} event{capiAlert.exhaustedCount > 1 ? "s" : ""} failed after automatic retries
+              </p>
+              <p className="text-neutral-300">
+                Check your Meta Pixel ID / Conversions API access token and retry within 7 days of order activity.
+                {capiAlert.recentExhausted[0]?.lastError
+                  ? ` Latest error: ${capiAlert.recentExhausted[0].lastError}`
+                  : ""}
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/admin/settings/marketing"
+            className="px-3.5 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-400/30 text-red-200 rounded-lg text-xs font-medium shrink-0 text-center"
+          >
+            Review CAPI Ledger
+          </Link>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

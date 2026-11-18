@@ -8,6 +8,10 @@ import { getPriceForSize } from "@/lib/products/types";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { calculateShipping, DISTRICTS, MAX_QTY_PER_LINE, normalizeBdPhone } from "@/lib/shipping";
 import { dispatchOrderTrackingEvent } from "@/lib/analytics/order-tracking";
+import {
+  extractMetaIdentifiersFromCookieHeader,
+  sanitizeMetaCookieId,
+} from "@/lib/analytics/fb-cookies";
 import { validateCoupon, useCoupon } from "@/lib/coupons";
 
 export const runtime = "nodejs";
@@ -27,6 +31,8 @@ const bodySchema = z.object({
   customerNotes: z.string().trim().max(500).optional(),
   expectedTotal: z.number().int().nonnegative(),
   couponCode: z.string().trim().max(50).optional(),
+  fbp: z.string().trim().max(300).optional(),
+  fbc: z.string().trim().max(300).optional(),
   items: z
     .array(
       z.object({
@@ -210,8 +216,23 @@ export async function POST(request: Request) {
     }
   }
 
+  const gpcOrDnt =
+    request.headers.get("sec-gpc") === "1" || request.headers.get("dnt") === "1";
+  const cookieIds = gpcOrDnt
+    ? {}
+    : extractMetaIdentifiersFromCookieHeader(request.headers.get("cookie"));
+  const fbp = gpcOrDnt
+    ? undefined
+    : sanitizeMetaCookieId(body.fbp) ?? cookieIds.fbp;
+  const fbc = gpcOrDnt
+    ? undefined
+    : sanitizeMetaCookieId(body.fbc) ?? cookieIds.fbc;
+
+  let order: Awaited<ReturnType<typeof createOrderIdempotent>>["order"];
+  let created: boolean;
+
   try {
-    const { order, created } = await createOrderIdempotent(
+    ({ order, created } = await createOrderIdempotent(
       {
         customerName: body.customerName,
         customerPhone: phone,
@@ -227,38 +248,56 @@ export async function POST(request: Request) {
         paymentStatus: "PENDING",
         status: "PENDING",
         customerNote: body.customerNotes || undefined,
+        fbp,
+        fbc,
       },
       body.idempotencyKey
-    );
-
-    // Same key arrived twice (double click / retry): hand back the original, undo the extra reservation.
-    if (!created && reservations.length) await releaseStock(reservations);
-
-    // Consume coupon on new orders only
-    if (created && appliedCouponCode) {
-      void useCoupon(appliedCouponCode);
-    }
-
-    // Server-side CAPI: send CODOrderPlaced ONLY when a new order is created (never Purchase on unpaid COD)
-    if (created) {
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd";
-      const userAgent = request.headers.get("user-agent") || undefined;
-      const ip = clientIp(request);
-
-      await dispatchOrderTrackingEvent(order, "CODOrderPlaced", {
-        eventSourceUrl: `${siteUrl}/order-success?order=${order.orderNumber}`,
-        clientIp: ip,
-        clientUserAgent: userAgent,
-      });
-    }
-
-    return NextResponse.json(
-      { orderNumber: order.orderNumber, total: order.total, subtotal: order.subtotal, shippingFee: order.shippingFee, discount: couponDiscount, duplicate: !created },
-      { status: created ? 201 : 200 }
-    );
+    ));
   } catch (error) {
     if (reservations.length) await releaseStock(reservations);
     console.error("[orders] failed to save order", error);
     return NextResponse.json({ error: "We couldn't save your order. Please try again." }, { status: 500 });
   }
+
+  // Same key arrived twice (double click / retry): hand back the original, undo the extra reservation.
+  if (!created && reservations.length) {
+    try {
+      await releaseStock(reservations);
+    } catch (error) {
+      console.error("[orders] failed to release duplicate stock reservation", error);
+    }
+  }
+
+  // Once the order is safely saved, coupon / CAPI tracking errors must NEVER roll back stock or fail checkout.
+  if (created) {
+    if (appliedCouponCode) {
+      try {
+        await useCoupon(appliedCouponCode);
+      } catch (error) {
+        console.error("[orders] coupon consumption failed after order save", error);
+      }
+    }
+
+    try {
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd";
+      const userAgent = request.headers.get("user-agent") || undefined;
+      const ip = clientIp(request);
+
+      await dispatchOrderTrackingEvent(order, "CODOrderPlaced", {
+        eventSourceUrl: `${siteUrl}/checkout`,
+        clientIp: ip,
+        clientUserAgent: userAgent,
+      });
+    } catch (error) {
+      console.error(
+        `[orders] post-order tracking failed for ${order.orderNumber} (order preserved)`,
+        error
+      );
+    }
+  }
+
+  return NextResponse.json(
+    { orderNumber: order.orderNumber, total: order.total, subtotal: order.subtotal, shippingFee: order.shippingFee, discount: couponDiscount, duplicate: !created },
+    { status: created ? 201 : 200 }
+  );
 }

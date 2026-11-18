@@ -9,6 +9,7 @@ import { cn, formatPrice } from "@/lib/utils";
 import { clearCart, syncCartFromServer, useCart } from "@/lib/cart/cart-store";
 import { calculateShipping, DISTRICTS, districtLabel, SHIPPING_RATES } from "@/lib/shipping";
 import { analytics } from "@/lib/analytics";
+import { getMetaClickIdentifiers } from "@/lib/analytics/fb-cookies";
 import CouponInput from "./coupon-input";
 
 const PAYMENT_METHODS = [
@@ -135,6 +136,7 @@ export default function CheckoutClient() {
     setErrors({});
 
     try {
+      const metaIds = getMetaClickIdentifiers();
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -151,6 +153,8 @@ export default function CheckoutClient() {
           paymentMethod: "COD",
           expectedTotal: total,
           couponCode: coupon?.code || undefined,
+          ...(metaIds.fbp ? { fbp: metaIds.fbp } : {}),
+          ...(metaIds.fbc ? { fbc: metaIds.fbc } : {}),
           items: lines.map((l) => ({
             productId: l.productId,
             size: l.size,

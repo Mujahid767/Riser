@@ -8,15 +8,37 @@ import { getMarketingCredentials } from "@/lib/marketing/settings";
 
 export const META_GRAPH_API_VERSION = process.env.META_API_VERSION || "v26.0";
 
+const META_COOKIE_ID_RE = /^fb\.\d+\.\d{10,16}\.[A-Za-z0-9_.\-~]{4,250}$/;
+
+/**
+ * Validate a real Meta `_fbp` or `_fbc` identifier.
+ * Returns the trimmed value if valid, or undefined (never invents missing IDs).
+ */
+export function sanitizeMetaIdentifier(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || !META_COOKIE_ID_RE.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+export type CapiActionSource =
+  | "website"
+  | "phone_call"
+  | "system_generated"
+  | "other";
+
 export type CapiEvent = {
   eventName: string;
   eventId: string; // MUST match the client-side fbq eventID when browser also sends the event
-  eventSourceUrl: string;
+  actionSource?: CapiActionSource;
+  eventSourceUrl?: string; // Required when actionSource === "website"; omitted for offline/system milestones
   eventTime?: number; // Unix seconds; defaults to now
   userPhone?: string; // e.g. 017XXXXXXXX (normalized & SHA-256 hashed)
   userEmail?: string;
   userName?: string;
   userCity?: string;
+  fbp?: string; // _fbp browser cookie (sent unhashed in user_data when present)
+  fbc?: string; // _fbc click cookie / derived from fbclid (sent unhashed when present)
   clientIp?: string;
   clientUserAgent?: string;
   customData?: Record<string, unknown>;
@@ -69,18 +91,25 @@ export async function sendCapiEvent(event: CapiEvent): Promise<CapiSendResult> {
       }
     }
 
+    const fbp = sanitizeMetaIdentifier(event.fbp);
+    const fbc = sanitizeMetaIdentifier(event.fbc);
+    if (fbp) userData.fbp = fbp;
+    if (fbc) userData.fbc = fbc;
     if (event.clientIp) userData.client_ip_address = event.clientIp;
     if (event.clientUserAgent) userData.client_user_agent = event.clientUserAgent;
 
+    const actionSource: CapiActionSource = event.actionSource ?? "website";
     const eventPayload: Record<string, unknown> = {
       event_name: event.eventName,
       event_time: event.eventTime ?? Math.floor(Date.now() / 1000),
       event_id: event.eventId,
-      event_source_url: event.eventSourceUrl,
-      action_source: "website",
+      action_source: actionSource,
       user_data: userData,
       custom_data: event.customData ?? {},
     };
+    if (actionSource === "website" && event.eventSourceUrl) {
+      eventPayload.event_source_url = event.eventSourceUrl;
+    }
 
     const payload: Record<string, unknown> = {
       data: [eventPayload],
@@ -101,7 +130,7 @@ export async function sendCapiEvent(event: CapiEvent): Promise<CapiSendResult> {
     );
 
     const data = (await res.json().catch(() => ({}))) as {
-      events_received?: number;
+      events_received?: unknown;
       error?: { message?: string; code?: number };
     };
 
@@ -112,7 +141,20 @@ export async function sendCapiEvent(event: CapiEvent): Promise<CapiSendResult> {
       };
     }
 
-    return { ok: true, eventsReceived: data.events_received ?? 1 };
+    if (
+      typeof data.events_received !== "number" ||
+      !Number.isFinite(data.events_received) ||
+      data.events_received < 1
+    ) {
+      return {
+        ok: false,
+        error: `Meta Graph API did not acknowledge event receipt (events_received=${String(
+          data.events_received ?? "missing"
+        )})`,
+      };
+    }
+
+    return { ok: true, eventsReceived: data.events_received };
   } catch (err) {
     const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
     return {

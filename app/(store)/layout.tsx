@@ -1,6 +1,7 @@
 import Header from "@/components/store/header";
 import Footer from "@/components/store/footer";
 import WhatsAppButton from "@/components/store/whatsapp-button";
+import MetaClickTracker from "@/components/store/meta-click-tracker";
 import { getSiteContent } from "@/lib/cms/store";
 
 export default async function StoreLayout({
@@ -12,6 +13,7 @@ export default async function StoreLayout({
 
   return (
     <div className="bg-[#070709] text-white min-h-screen flex flex-col justify-between relative">
+      <MetaClickTracker />
       <Header announcement={content.announcement} />
       <main className="flex-1">{children}</main>
       <Footer content={content} />

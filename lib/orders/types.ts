@@ -13,7 +13,7 @@ export type PaymentMethod = "COD" | "BKASH" | "NAGAD";
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED" | "PARTIALLY_REFUNDED";
 
 export type OrderTrackingEventName = "CODOrderPlaced" | "QualifiedOrder" | "Purchase";
-export type OrderTrackingEventStatus = "PENDING" | "SENT" | "FAILED";
+export type OrderTrackingEventStatus = "PENDING" | "SENT" | "FAILED" | "EXPIRED";
 
 export type OrderTrackingEvent = {
   id: string;
@@ -25,6 +25,8 @@ export type OrderTrackingEvent = {
   attempts: number;
   lastError?: string;
   lastAttemptAt?: string;
+  nextRetryAt?: string;
+  eventTime?: number;
   sentAt?: string;
   createdAt: string;
 };
@@ -72,6 +74,14 @@ export type AdminOrder = {
   idempotencyKey?: string;
   /** Automatic review flags, e.g. "repeat_phone_24h" */
   flags?: string[];
+  /** Meta Browser ID (`_fbp` cookie) captured at checkout when permitted */
+  fbp?: string;
+  /** Meta Click ID (`_fbc` cookie / derived from `fbclid`) captured when permitted */
+  fbc?: string;
+  /** Milestone timestamps for accurate CAPI `event_time` preservation across retries */
+  confirmedAt?: string;
+  deliveredAt?: string;
+  paidAt?: string;
   /** Server-side Meta CAPI delivery log persisted in Neon */
   trackingEvents?: OrderTrackingEvent[];
   createdAt: string;

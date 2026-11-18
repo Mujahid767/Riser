@@ -204,13 +204,19 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
 
           {/* Meta CAPI 3-Stage Tracking Ledger */}
           <section className="bg-admin-card border border-admin-border p-5 space-y-4">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-white font-semibold text-sm uppercase tracking-wider flex items-center gap-2">
                 <Radio className="w-4 h-4 text-blue-400" /> Meta CAPI Event Ledger
               </h2>
-              <span className="text-[10px] font-mono text-neutral-500">
-                Purchase fires only on Delivered + Paid
-              </span>
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono">
+                <span className={order.fbp ? "px-2 py-0.5 bg-emerald-500/15 text-emerald-300" : "px-2 py-0.5 bg-white/5 text-neutral-500"}>
+                  _fbp: {order.fbp ? "captured" : "unavailable"}
+                </span>
+                <span className={order.fbc ? "px-2 py-0.5 bg-emerald-500/15 text-emerald-300" : "px-2 py-0.5 bg-white/5 text-neutral-500"}>
+                  _fbc: {order.fbc ? "captured" : "unavailable"}
+                </span>
+                <span className="text-neutral-500">Purchase fires only on Delivered + Paid</span>
+              </div>
             </div>
 
             {retryMsg && (
@@ -224,15 +230,15 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
                 [
                   {
                     eventName: "CODOrderPlaced" as OrderTrackingEventName,
-                    desc: "Stage 1 — Checkout submitted",
+                    desc: "Stage 1 — Checkout submitted (website)",
                   },
                   {
                     eventName: "QualifiedOrder" as OrderTrackingEventName,
-                    desc: "Stage 2 — Staff confirmed order (Status: Confirmed)",
+                    desc: "Stage 2 — Staff verified order by phone (phone_call)",
                   },
                   {
                     eventName: "Purchase" as OrderTrackingEventName,
-                    desc: "Stage 3 — Parcel delivered & cash received (Delivered + Paid)",
+                    desc: "Stage 3 — Parcel delivered & cash received (system_generated)",
                   },
                 ] as const
               ).map(({ eventName, desc }) => {
@@ -252,7 +258,9 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
                                 ? "bg-emerald-500/15 text-emerald-400"
                                 : ev.status === "FAILED"
                                   ? "bg-red-500/15 text-red-400"
-                                  : "bg-amber-500/15 text-amber-400"
+                                  : ev.status === "EXPIRED"
+                                    ? "bg-neutral-500/20 text-neutral-300"
+                                    : "bg-amber-500/15 text-amber-400"
                             }`}
                           >
                             {ev.status} ({ev.attempts}x)
@@ -267,14 +275,22 @@ export default function OrderDetailClient({ order: initial }: { order: AdminOrde
                       {ev?.eventId && (
                         <p className="text-[10px] font-mono text-neutral-500 mt-0.5">
                           event_id: <span className="text-neutral-300">{ev.eventId}</span>
+                          {ev.eventTime && ` · occurred ${new Date(ev.eventTime * 1000).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`}
                           {ev.sentAt && ` · Sent ${new Date(ev.sentAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`}
+                        </p>
+                      )}
+                      {ev?.status === "FAILED" && (
+                        <p className="text-[10px] font-mono text-amber-400 mt-0.5">
+                          {ev.nextRetryAt
+                            ? `Auto-retry scheduled for ${new Date(ev.nextRetryAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`
+                            : "Automatic retries exhausted — check Meta Pixel/CAPI settings and click Retry."}
                         </p>
                       )}
                       {ev?.lastError && (
                         <p className="text-[11px] text-red-400 mt-1">{ev.lastError}</p>
                       )}
                     </div>
-                    {ev && ev.status !== "SENT" && (
+                    {ev && ev.status !== "SENT" && ev.status !== "EXPIRED" && (
                       <button
                         type="button"
                         onClick={() => void retryTracking(ev.id)}
