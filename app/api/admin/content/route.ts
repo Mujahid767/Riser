@@ -17,6 +17,14 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Missing page content." }, { status: 400 });
   }
 
-  const content = await saveSiteContent(body.content);
-  return NextResponse.json({ content });
+  try {
+    const content = await saveSiteContent(body.content);
+    return NextResponse.json({ content });
+  } catch (err) {
+    console.error("[admin/content] save failed", err);
+    return NextResponse.json(
+      { error: "Could not save content changes to the database. Please try again." },
+      { status: 500 }
+    );
+  }
 }

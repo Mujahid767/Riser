@@ -29,6 +29,7 @@ export type AdminProduct = {
   colors: ProductColor[];
   sizes: string[];
   sizePrices?: Record<string, number>;
+  sizeStock?: Record<string, number>;
   fabric: string;
   description: string;
   editionBadge?: string;
@@ -72,5 +73,36 @@ export function getPriceForSize(
     return sizePrices[size];
   }
   return basePrice;
+}
+
+/** Normalize raw `sizeStock` JSON into a finite non-negative integer map. */
+export function normalizeSizeStock(raw?: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = k.trim();
+    const n = Number(v);
+    if (key && Number.isFinite(n) && n >= 0) {
+      out[key] = Math.floor(n);
+    }
+  }
+  return out;
+}
+
+export function hasPerSizeStock(sizeStock?: Record<string, number> | null): boolean {
+  return Boolean(sizeStock && Object.keys(sizeStock).length > 0);
+}
+
+/** Resolve available stock for a given size (falls back to shared product stock when sizeStock isn't configured). */
+export function getStockForSize(
+  totalStock: number | undefined,
+  sizeStock?: Record<string, number> | null,
+  size?: string | null
+): number | undefined {
+  if (totalStock === undefined) return undefined;
+  if (!hasPerSizeStock(sizeStock)) return Math.max(0, totalStock);
+  if (!size) return Math.max(0, totalStock);
+  const val = sizeStock![size];
+  return typeof val === "number" && Number.isFinite(val) ? Math.max(0, val) : 0;
 }
 

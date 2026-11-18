@@ -21,19 +21,19 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
   ),
   title: {
-    default: "Riser Atelier — Luxury Haute Couture",
-    template: "%s | Riser Atelier",
+    default: "Riser — Girls' Dresses, Baby Frocks & Party Wear in Bangladesh",
+    template: "%s | Riser",
   },
   description:
-    "Riser Haute Couture — Signature Nayra Cut with Skirt, Royal Baby Frocks, Two-Piece & Three-Piece sets, and Architectural Short Tops. Handcrafted in Bangladesh since 1998.",
+    "Shop Riser for girls' clothing in Bangladesh — Royal Baby Frocks, Party Frocks, Nayra Cut Dresses with Skirt, Kids Two-Piece & Three-Piece sets, and Women's Ethnic Wear since 1998.",
   keywords: [
-    "children's clothing",
-    "girls dresses",
-    "kids fashion",
-    "frocks",
-    "party wear",
-    "Bangladesh kids clothes",
-    "premium children's wear",
+    "girls dresses Bangladesh",
+    "baby frocks",
+    "kids party frocks",
+    "nayra cut dress",
+    "girls three piece",
+    "children's clothing Bangladesh",
+    "kids fashion Dhaka",
     "Riser",
   ],
   authors: [{ name: "Riser" }],
@@ -43,14 +43,14 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_BD",
     siteName: "Riser",
-    title: "Riser — Premium Children's Fashion Since 1998",
+    title: "Riser — Girls' Dresses, Baby Frocks & Kids Fashion Since 1998",
     description:
-      "Premium girls' clothing — dresses, frocks, party wear. Established 1998.",
+      "Shop baby frocks, girls' party wear, Nayra cut sets, and kids ethnic dresses in Bangladesh.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Riser — Premium Children's Fashion",
-    description: "Premium girls' clothing since 1998.",
+    title: "Riser — Girls' Dresses, Baby Frocks & Party Wear",
+    description: "Premium girls' dresses, frocks & party wear in Bangladesh since 1998.",
   },
   robots: {
     index: true,

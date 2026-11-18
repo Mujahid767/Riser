@@ -86,14 +86,23 @@ export default function PrivacyPage() {
                 visitors use our site. Data is anonymized and aggregated.
               </li>
               <li>
-                <strong>Meta Pixel:</strong> To measure the effectiveness of our
-                Facebook and Instagram advertising. This may share limited data
-                with Meta Platforms.
+                <strong>Meta Pixel &amp; Conversions API (CAPI):</strong> To
+                measure ad performance and avoid reporting unverified COD orders
+                as completed purchases, we use Meta Pixel browser cookies (
+                <code>_fbp</code> and <code>_fbc</code> when you click a Meta ad)
+                alongside server-side Meta Conversions API events (
+                <code>CODOrderPlaced</code>, <code>QualifiedOrder</code>, and{" "}
+                <code>Purchase</code> after delivery and payment settlement). We
+                never generate synthetic ad cookies when cookies or privacy
+                signals disallow them, and we respect browser{" "}
+                <strong>Do Not Track (DNT)</strong> and{" "}
+                <strong>Global Privacy Control (GPC)</strong> signals.
               </li>
             </ul>
             <p className="mt-3">
-              You can disable cookies in your browser settings. However, this
-              may affect your shopping experience.
+              You can disable cookies in your browser settings or enable Global
+              Privacy Control / Do Not Track at any time. Disabling essential
+              cookies may affect cart and checkout functionality.
             </p>
           </section>
 
@@ -111,8 +120,11 @@ export default function PrivacyPage() {
                 order fulfillment
               </li>
               <li>
-                <strong>Analytics providers:</strong> Google Analytics and Meta
-                (anonymized/hashed data only)
+                <strong>Analytics &amp; Advertising partners:</strong> Google
+                Analytics (aggregated insights) and Meta Platforms (order amounts
+                plus one-way SHA-256 cryptographic hashes of phone, email, name,
+                and city, along with Meta click/browser identifiers when
+                permitted) for conversion attribution
               </li>
               <li>
                 <strong>Legal authorities:</strong> If required by Bangladeshi

@@ -22,7 +22,11 @@ import { addToCart } from "@/lib/cart/cart-store";
 import { analytics } from "@/lib/analytics";
 import { MAX_QTY_PER_LINE, SHIPPING_RATES } from "@/lib/shipping";
 import type { StoreProduct } from "@/lib/catalog";
-import { getPriceForSize } from "@/lib/products/types";
+import {
+  getPriceForSize,
+  getStockForSize,
+  hasPerSizeStock,
+} from "@/lib/products/types";
 import ProductCard from "@/components/product/product-card";
 import MeasurementChart from "@/components/product/measurement-chart";
 import ReviewSection from "@/components/product/review-section";
@@ -65,9 +69,17 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   const hasMultiplePrices = minSizePrice !== maxSizePrice;
 
   const discount = calculateDiscount(activePrice, product.compareAtPrice);
-  const soldOut = product.stock === 0;
-  const maxQty = Math.min(MAX_QTY_PER_LINE, product.stock ?? MAX_QTY_PER_LINE);
-  const lowStock = product.stock !== undefined && product.stock > 0 && product.stock <= 5;
+  const perSizeTracked = hasPerSizeStock(product.sizeStock);
+  const activeStock = selectedSize
+    ? getStockForSize(product.stock, product.sizeStock, selectedSize)
+    : product.stock;
+  const soldOut = activeStock === 0;
+  const maxQty = Math.max(
+    1,
+    Math.min(MAX_QTY_PER_LINE, activeStock ?? MAX_QTY_PER_LINE)
+  );
+  const lowStock =
+    activeStock !== undefined && activeStock > 0 && activeStock <= 5;
 
   const images = [product.imageUrl, product.secondaryImageUrl, ...(product.gallery ?? [])].filter(
     (img, i, arr): img is string => Boolean(img) && arr.indexOf(img) === i
@@ -310,23 +322,33 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {product.sizes.map((size) => {
                       const sizePrice = getPriceForSize(product.price, product.sizePrices, size);
+                      const sizeAvail = getStockForSize(product.stock, product.sizeStock, size);
+                      const sizeSoldOut = perSizeTracked && sizeAvail === 0;
                       return (
                         <button
                           key={size}
                           type="button"
+                          disabled={sizeSoldOut}
                           onClick={() => {
                             setSelectedSize(size);
+                            if (typeof sizeAvail === "number" && sizeAvail > 0) {
+                              setQuantity((q) => Math.min(q, Math.min(MAX_QTY_PER_LINE, sizeAvail)));
+                            }
                             setMessage(null);
                           }}
                           className={cn(
                             "py-2.5 px-2 text-xs font-mono tracking-wider uppercase border transition-all text-center flex flex-col items-center justify-center gap-0.5",
-                            selectedSize === size
-                              ? "bg-white text-black border-white font-bold shadow-lg shadow-white/20"
-                              : "bg-black/50 text-neutral-300 border-white/15 hover:border-white/50 hover:text-white"
+                            sizeSoldOut
+                              ? "bg-black/20 text-neutral-600 border-white/10 line-through cursor-not-allowed"
+                              : selectedSize === size
+                                ? "bg-white text-black border-white font-bold shadow-lg shadow-white/20"
+                                : "bg-black/50 text-neutral-300 border-white/15 hover:border-white/50 hover:text-white"
                           )}
                         >
                           <span>{size}</span>
-                          {hasMultiplePrices && (
+                          {sizeSoldOut ? (
+                            <span className="text-[9px] text-neutral-500 no-underline">Sold Out</span>
+                          ) : hasMultiplePrices ? (
                             <span
                               className={cn(
                                 "text-[10px]",
@@ -335,7 +357,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                             >
                               {formatPrice(sizePrice)}
                             </span>
-                          )}
+                          ) : null}
                         </button>
                       );
                     })}
@@ -398,7 +420,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
 
                 {lowStock && (
                   <p className="text-[11px] font-mono uppercase tracking-widest text-amber-400">
-                    Only {product.stock} left
+                    Only {activeStock} left{selectedSize && perSizeTracked ? ` in size ${selectedSize}` : ""}
                   </p>
                 )}
 

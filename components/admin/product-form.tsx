@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminProduct } from "@/lib/products/types";
-import { CATEGORIES, DEPARTMENTS, KIDS_SIZES, WOMEN_SIZES } from "@/lib/products/types";
+import {
+  CATEGORIES,
+  DEPARTMENTS,
+  KIDS_SIZES,
+  WOMEN_SIZES,
+  hasPerSizeStock,
+} from "@/lib/products/types";
 import ImagePicker from "@/components/admin/image-picker";
 import { X, Plus } from "lucide-react";
 
@@ -28,6 +34,7 @@ const BLANK: Omit<AdminProduct, "id" | "createdAt" | "updatedAt"> = {
   colors: [],
   sizes: [],
   sizePrices: {},
+  sizeStock: {},
   fabric: "",
   description: "",
   editionBadge: "",
@@ -70,10 +77,32 @@ export default function ProductForm({ mode, initial }: Props) {
     if (data.sizes.includes(s)) {
       const nextPrices = { ...(data.sizePrices ?? {}) };
       delete nextPrices[s];
-      set({ sizes: data.sizes.filter((x) => x !== s), sizePrices: nextPrices });
+      const nextStock = { ...(data.sizeStock ?? {}) };
+      delete nextStock[s];
+      const nextSizes = data.sizes.filter((x) => x !== s);
+      const nextTotal = hasPerSizeStock(nextStock)
+        ? Object.values(nextStock).reduce((sum, n) => sum + n, 0)
+        : data.stock;
+      set({ sizes: nextSizes, sizePrices: nextPrices, sizeStock: nextStock, stock: nextTotal });
     } else {
       set({ sizes: [...data.sizes, s] });
     }
+  }
+
+  function setSizeStock(size: string, val: string) {
+    const next = { ...(data.sizeStock ?? {}) };
+    if (val === "") {
+      delete next[size];
+    } else {
+      const num = Math.max(0, Math.floor(Number(val)));
+      if (Number.isFinite(num)) {
+        next[size] = num;
+      }
+    }
+    const total = hasPerSizeStock(next)
+      ? Object.values(next).reduce((sum, n) => sum + n, 0)
+      : data.stock;
+    set({ sizeStock: next, stock: total });
   }
 
   function addCustomSize() {
@@ -237,7 +266,9 @@ export default function ProductForm({ mode, initial }: Props) {
               <ImagePicker
                 label="Add gallery photo"
                 value=""
-                onChange={(url) => { if (url) set({ images: [...data.images, url] }); }}
+                onChange={(url) => {
+                  if (url) setData((d) => ({ ...d, images: [...d.images, url] }));
+                }}
               />
             </div>
           </section>
@@ -293,12 +324,12 @@ export default function ProductForm({ mode, initial }: Props) {
               </button>
             </div>
 
-            {/* Per-Size Price Table */}
+            {/* Per-Size Price & Stock Table */}
             {data.sizes.length > 0 && (
               <div className="pt-3 border-t border-white/10 space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[10px] uppercase tracking-widest text-neutral-400">
-                    Price per Size (৳) — leave blank to use base price ({data.price ? `৳${data.price}` : "not set"})
+                    Price (৳) &amp; Stock per Size — leave price blank for default ({data.price ? `৳${data.price}` : "not set"}); leave stock blank for shared inventory
                   </span>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-2.5">
@@ -307,11 +338,11 @@ export default function ProductForm({ mode, initial }: Props) {
                       key={s}
                       className="flex items-center gap-2 bg-black/30 border border-white/10 px-3 py-2"
                     >
-                      <span className="text-xs font-mono font-bold text-white min-w-[64px]">
-                        Size {s}
+                      <span className="text-xs font-mono font-bold text-white min-w-[56px]">
+                        {s}
                       </span>
                       <div className="relative flex-1">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-neutral-500">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-neutral-500">
                           ৳
                         </span>
                         <input
@@ -319,10 +350,20 @@ export default function ProductForm({ mode, initial }: Props) {
                           min={0}
                           value={data.sizePrices?.[s] ?? ""}
                           onChange={(e) => setSizePrice(s, e.target.value)}
-                          placeholder={data.price ? `${data.price} (default)` : "Price in ৳"}
-                          className="w-full bg-black/50 border border-white/10 pl-6 pr-2 py-1.5 text-xs font-mono text-white outline-none focus:border-white/50 placeholder:text-neutral-600"
+                          placeholder={data.price ? `${data.price}` : "Price"}
+                          aria-label={`Price for size ${s}`}
+                          className="w-full bg-black/50 border border-white/10 pl-5 pr-1.5 py-1.5 text-xs font-mono text-white outline-none focus:border-white/50 placeholder:text-neutral-600"
                         />
                       </div>
+                      <input
+                        type="number"
+                        min={0}
+                        value={data.sizeStock?.[s] ?? ""}
+                        onChange={(e) => setSizeStock(s, e.target.value)}
+                        placeholder="Qty"
+                        aria-label={`Stock for size ${s}`}
+                        className="w-20 bg-black/50 border border-white/10 px-2 py-1.5 text-xs font-mono text-white outline-none focus:border-white/50 placeholder:text-neutral-600"
+                      />
                       <button
                         type="button"
                         onClick={() => toggleSize(s)}
@@ -409,13 +450,20 @@ export default function ProductForm({ mode, initial }: Props) {
                 className={inputClass}
               />
             </Field>
-            <Field label="Stock qty">
+            <Field
+              label={
+                hasPerSizeStock(data.sizeStock)
+                  ? "Total Stock (summed from sizes)"
+                  : "Stock qty"
+              }
+            >
               <input
                 type="number"
                 value={data.stock}
                 onChange={(e) => set({ stock: Number(e.target.value) })}
+                disabled={hasPerSizeStock(data.sizeStock)}
                 min={0}
-                className={inputClass}
+                className={`${inputClass} disabled:opacity-60`}
               />
             </Field>
           </section>

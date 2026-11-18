@@ -22,6 +22,8 @@ export interface SeedProduct {
   sizes?: string[];
   /** Optional price per size override e.g. { "16-20": 650, "22-26": 750 } */
   sizePrices?: Record<string, number>;
+  /** Optional stock per size e.g. { "16-20": 4, "22-26": 1 } */
+  sizeStock?: Record<string, number>;
   category:
     | "baby-frock"
     | "baby-party-frock"

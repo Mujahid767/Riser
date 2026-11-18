@@ -88,6 +88,8 @@ model Product {
   sizes            Json          @default("[]")
   // Optional price override per size: Record<string, number> e.g. { "16-20": 650, "22-26": 750 }
   sizePrices       Json          @default("{}")
+  // Optional inventory per size: Record<string, number> e.g. { "16-20": 4, "22-26": 1 }
+  sizeStock        Json          @default("{}")
 
   // Badges
   editionBadge     String?
@@ -216,6 +218,13 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@map("order_items")
+}
+
+model OrderCounter {
+  year      Int @id
+  lastValue Int @default(0)
+
+  @@map("order_counters")
 }
 
 enum TrackingEventStatus {

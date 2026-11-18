@@ -345,12 +345,29 @@ export async function dispatchOrderTrackingEvent(
         eventTime: defaultEventTime,
         status: "PENDING",
         attempts: 0,
+        lastAttemptAt: null,
         payload: initialPayload,
       },
       update: {},
     });
 
     if (existing.status === "SENT" || existing.status === "EXPIRED") {
+      return toOrderTrackingEvent(existing);
+    }
+
+    // Atomically claim dispatch right after creation/failure so concurrent calls
+    // never transmit twice and Neon vs app-server clock skew cannot skip initial sends.
+    const claimNow = new Date();
+    const staleCutoff = new Date(claimNow.getTime() - 60_000);
+    const claimed = await prisma.trackingEvent.updateMany({
+      where: {
+        id: existing.id,
+        status: { in: ["PENDING", "FAILED"] },
+        OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lte: staleCutoff } }],
+      },
+      data: { lastAttemptAt: claimNow },
+    });
+    if (claimed.count === 0) {
       return toOrderTrackingEvent(existing);
     }
 
@@ -442,6 +459,26 @@ export async function processDueTrackingRetries(limit = 20): Promise<{
     checked = dueRows.length;
 
     for (const row of dueRows) {
+      // Acquire a database lease (2 min) so overlapping workers/triggers never double-send
+      const claimTime = new Date();
+      const leaseUntil = new Date(claimTime.getTime() + 2 * 60 * 1000);
+      const claimed = await prisma.trackingEvent.updateMany({
+        where: {
+          id: row.id,
+          status: { in: ["PENDING", "FAILED"] },
+          attempts: { lt: MAX_CAPI_ATTEMPTS },
+          OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: claimTime } }],
+        },
+        data: {
+          nextRetryAt: leaseUntil,
+          lastAttemptAt: claimTime,
+        },
+      });
+      if (claimed.count === 0) {
+        skipped++;
+        continue;
+      }
+
       const order = await getOrder(row.orderId);
       const eventName = row.eventName as OrderTrackingEventName;
 

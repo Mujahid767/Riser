@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { normalizeBdPhone } from "@/lib/shipping";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const limit = rateLimit(`track:${clientIp(request)}`, 20, 10 * 60 * 1000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many tracking requests. Please wait a few minutes and try again." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const rawOrderNumber = searchParams.get("orderNumber")?.trim() ?? "";
   const rawPhone = searchParams.get("phone")?.trim() ?? "";

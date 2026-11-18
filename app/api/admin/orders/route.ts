@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
-import { listOrders, getOrder, updateOrder } from "@/lib/orders/store";
-import { releaseStock } from "@/lib/products/store";
+import { listOrders, getOrder, updateOrderAtomic } from "@/lib/orders/store";
 import { ORDER_STATUSES, type OrderStatus, type PaymentStatus } from "@/lib/orders/types";
 import { dispatchOrderTrackingEvent } from "@/lib/analytics/order-tracking";
 
@@ -64,24 +63,17 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Invalid payment status." }, { status: 400 });
   }
 
-  const before = await getOrder(id);
-  if (!before) return NextResponse.json({ error: "Order not found." }, { status: 404 });
-
-  // A cancelled order cannot be re-opened — stock was already returned.
-  if (before.status === "CANCELLED" && body.status && body.status !== "CANCELLED") {
+  const result = await updateOrderAtomic(id, body);
+  if (result.kind === "not_found") {
+    return NextResponse.json({ error: "Order not found." }, { status: 404 });
+  }
+  if (result.kind === "cannot_reopen") {
     return NextResponse.json(
       { error: "A cancelled order can't be re-opened. Ask the customer to place a new order." },
       { status: 400 }
     );
   }
-
-  const order = await updateOrder(id, body);
-  if (!order) return NextResponse.json({ error: "Order not found." }, { status: 404 });
-
-  // First transition into CANCELLED → return stock to the shelf.
-  if (before.status !== "CANCELLED" && order.status === "CANCELLED") {
-    await releaseStock(order.items.map((i) => ({ productId: i.productId, qty: i.qty })));
-  }
+  const { order } = result;
 
   // Stage 2: Confirmed by phone → QualifiedOrder (action_source: "phone_call", no admin URL)
   // Uses confirmedAt or current CONFIRMED status so later retries remain eligible after shipping.

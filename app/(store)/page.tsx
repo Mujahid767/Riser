@@ -12,9 +12,9 @@ import { getCatalogProducts } from "@/lib/catalog";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Riser Atelier — Haute Couture for Girls & Women",
+  title: "Riser — Girls' Dresses, Baby Frocks & Party Wear in Bangladesh",
   description:
-    "Discover Riser's luxury collection — Signature Nayra Cut with Skirt, Royal Baby Frocks, Kids & Adult Two-Piece and Three-Piece Sets, and Architectural Short Tops.",
+    "Explore Riser's collection of girls' baby frocks, party frocks, Nayra Cut sets, kids two-piece and three-piece outfits, and women's ethnic wear — crafted since 1998.",
 };
 
 export default async function HomePage() {

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { loadCatalog } from "@/lib/catalog";
-import { createOrderIdempotent } from "@/lib/orders/store";
+import { createOrderAtomic, findOrderByIdempotencyKey } from "@/lib/orders/store";
 import type { OrderItem } from "@/lib/orders/types";
-import { releaseStock, reserveStock } from "@/lib/products/store";
-import { getPriceForSize } from "@/lib/products/types";
+import type { StockRequest } from "@/lib/products/store";
+import { getPriceForSize, getStockForSize, hasPerSizeStock } from "@/lib/products/types";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { calculateShipping, DISTRICTS, MAX_QTY_PER_LINE, normalizeBdPhone } from "@/lib/shipping";
 import { dispatchOrderTrackingEvent } from "@/lib/analytics/order-tracking";
@@ -12,7 +12,7 @@ import {
   extractMetaIdentifiersFromCookieHeader,
   sanitizeMetaCookieId,
 } from "@/lib/analytics/fb-cookies";
-import { validateCoupon, useCoupon } from "@/lib/coupons";
+import { validateCoupon } from "@/lib/coupons";
 
 export const runtime = "nodejs";
 
@@ -103,6 +103,23 @@ export async function POST(request: Request) {
     );
   }
 
+  // 2b. Check idempotency key BEFORE stock/coupon validation so retries return
+  // the original confirmation even if that order took the last unit in stock.
+  const priorOrder = await findOrderByIdempotencyKey(body.idempotencyKey);
+  if (priorOrder) {
+    return NextResponse.json(
+      {
+        orderNumber: priorOrder.orderNumber,
+        total: priorOrder.total,
+        subtotal: priorOrder.subtotal,
+        shippingFee: priorOrder.shippingFee,
+        discount: priorOrder.discount,
+        duplicate: true,
+      },
+      { status: 200 }
+    );
+  }
+
   // 3. Merge duplicate variants so stock is checked against the real total
   const merged = new Map<string, { productId: string; size: string; color: string; qty: number }>();
   for (const it of body.items) {
@@ -116,6 +133,8 @@ export async function POST(request: Request) {
   const checks: LineCheck[] = [];
   const orderItems: OrderItem[] = [];
   const stockNeeds = new Map<string, number>();
+  const sizeNeeds = new Map<string, { productId: string; size: string; qty: number }>();
+  const stockRequests: StockRequest[] = [];
   let problem = false;
 
   for (const [key, it] of merged) {
@@ -134,7 +153,10 @@ export async function POST(request: Request) {
     }
     const unitPrice = getPriceForSize(product.price, product.sizePrices, it.size);
     const tracked = product.source === "admin";
-    const maxQty = tracked ? Math.max(0, product.stock ?? 0) : null;
+    const availForLine = tracked
+      ? getStockForSize(product.stock, product.sizeStock, it.size) ?? 0
+      : null;
+    const maxQty = availForLine === null ? null : Math.max(0, availForLine);
     checks.push({ key, ...it, unitPrice, maxQty, available: maxQty === null || maxQty > 0 });
     orderItems.push({
       productId: product.id,
@@ -145,15 +167,41 @@ export async function POST(request: Request) {
       qty: it.qty,
       unitPrice,
     });
-    if (tracked) stockNeeds.set(product.id, (stockNeeds.get(product.id) ?? 0) + it.qty);
+    if (tracked) {
+      stockNeeds.set(product.id, (stockNeeds.get(product.id) ?? 0) + it.qty);
+      stockRequests.push({ productId: product.id, size: it.size, qty: it.qty });
+      if (it.size && hasPerSizeStock(product.sizeStock)) {
+        const sk = `${product.id}__${it.size}`;
+        const prev = sizeNeeds.get(sk);
+        sizeNeeds.set(sk, {
+          productId: product.id,
+          size: it.size,
+          qty: (prev?.qty ?? 0) + it.qty,
+        });
+      }
+    }
   }
 
-  // stock per product (a product can span several size/colour lines)
+  // stock per product & per size (a product can span several color lines of the same size)
   for (const [productId, need] of stockNeeds) {
     const product = catalog.find((p) => p.id === productId)!;
     if ((product.stock ?? 0) < need) {
       problem = true;
       for (const c of checks) if (c.productId === productId) c.reason ??= `only ${product.stock ?? 0} left`;
+    }
+  }
+  for (const { productId, size, qty } of sizeNeeds.values()) {
+    const product = catalog.find((p) => p.id === productId)!;
+    const avail = getStockForSize(product.stock, product.sizeStock, size) ?? 0;
+    if (avail < qty) {
+      problem = true;
+      for (const c of checks) {
+        if (c.productId === productId && c.size === size) {
+          c.maxQty = avail;
+          c.available = avail > 0;
+          c.reason ??= avail === 0 ? `size ${size} is out of stock` : `only ${avail} left in size ${size}`;
+        }
+      }
     }
   }
 
@@ -200,22 +248,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // 5. Take stock atomically (admin products only), then save the order
-  const reservations = [...stockNeeds].map(([productId, qty]) => ({ productId, qty }));
-  if (reservations.length) {
-    const r = await reserveStock(reservations);
-    if (!r.ok) {
-      return NextResponse.json(
-        {
-          error: "Sorry — someone just bought the last piece. Please review your bag.",
-          code: "STOCK_CHANGED",
-          lines: syncLines.map((l) => (checks.find((c) => c.key === l.key)?.productId === r.productId ? { ...l, maxQty: r.available, available: r.available > 0 } : l)),
-        },
-        { status: 409 }
-      );
-    }
-  }
-
+  // 5. Atomically check idempotency, reserve per-size stock, redeem coupon,
+  // allocate sequential order number, and persist the order in one transaction.
   const gpcOrDnt =
     request.headers.get("sec-gpc") === "1" || request.headers.get("dnt") === "1";
   const cookieIds = gpcOrDnt
@@ -228,11 +262,9 @@ export async function POST(request: Request) {
     ? undefined
     : sanitizeMetaCookieId(body.fbc) ?? cookieIds.fbc;
 
-  let order: Awaited<ReturnType<typeof createOrderIdempotent>>["order"];
-  let created: boolean;
-
+  let txResult: Awaited<ReturnType<typeof createOrderAtomic>>;
   try {
-    ({ order, created } = await createOrderIdempotent(
+    txResult = await createOrderAtomic(
       {
         customerName: body.customerName,
         customerPhone: phone,
@@ -251,33 +283,50 @@ export async function POST(request: Request) {
         fbp,
         fbc,
       },
-      body.idempotencyKey
-    ));
-  } catch (error) {
-    if (reservations.length) await releaseStock(reservations);
-    console.error("[orders] failed to save order", error);
-    return NextResponse.json({ error: "We couldn't save your order. Please try again." }, { status: 500 });
-  }
-
-  // Same key arrived twice (double click / retry): hand back the original, undo the extra reservation.
-  if (!created && reservations.length) {
-    try {
-      await releaseStock(reservations);
-    } catch (error) {
-      console.error("[orders] failed to release duplicate stock reservation", error);
-    }
-  }
-
-  // Once the order is safely saved, coupon / CAPI tracking errors must NEVER roll back stock or fail checkout.
-  if (created) {
-    if (appliedCouponCode) {
-      try {
-        await useCoupon(appliedCouponCode);
-      } catch (error) {
-        console.error("[orders] coupon consumption failed after order save", error);
+      body.idempotencyKey,
+      {
+        stockRequests,
+        couponCode: appliedCouponCode,
       }
-    }
+    );
+  } catch (error) {
+    console.error("[orders] failed to save order", error);
+    return NextResponse.json(
+      { error: "We couldn't save your order. Please try again." },
+      { status: 500 }
+    );
+  }
 
+  if (txResult.kind === "stock_conflict") {
+    return NextResponse.json(
+      {
+        error: "Sorry — someone just bought the last piece. Please review your bag.",
+        code: "STOCK_CHANGED",
+        lines: syncLines.map((l) => {
+          const chk = checks.find((c) => c.key === l.key);
+          const matchesProduct = chk?.productId === txResult.productId;
+          const matchesSize = !txResult.size || chk?.size === txResult.size;
+          return matchesProduct && matchesSize
+            ? { ...l, maxQty: txResult.available, available: txResult.available > 0 }
+            : l;
+        }),
+      },
+      { status: 409 }
+    );
+  }
+
+  if (txResult.kind === "coupon_invalid") {
+    return NextResponse.json(
+      { error: txResult.error, code: "COUPON_INVALID" },
+      { status: 400 }
+    );
+  }
+
+  const created = txResult.kind === "created";
+  const order = txResult.order;
+
+  // Once the order is safely saved, CAPI tracking errors must NEVER roll back stock or fail checkout.
+  if (created) {
     try {
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://riser.com.bd";
       const userAgent = request.headers.get("user-agent") || undefined;
@@ -297,7 +346,14 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(
-    { orderNumber: order.orderNumber, total: order.total, subtotal: order.subtotal, shippingFee: order.shippingFee, discount: couponDiscount, duplicate: !created },
+    {
+      orderNumber: order.orderNumber,
+      total: order.total,
+      subtotal: order.subtotal,
+      shippingFee: order.shippingFee,
+      discount: order.discount,
+      duplicate: !created,
+    },
     { status: created ? 201 : 200 }
   );
 }

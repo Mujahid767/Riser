@@ -67,6 +67,7 @@ export default function ReviewSection({ productId }: ReviewSectionProps) {
   const [formRating, setFormRating] = useState(5);
   const [formName, setFormName] = useState("");
   const [formComment, setFormComment] = useState("");
+  const [formWebsite, setFormWebsite] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [formError, setFormError] = useState("");
@@ -99,6 +100,7 @@ export default function ReviewSection({ productId }: ReviewSectionProps) {
           rating: formRating,
           comment: formComment,
           name: formName,
+          website: formWebsite,
         }),
       });
       if (!res.ok) {
@@ -153,6 +155,15 @@ export default function ReviewSection({ productId }: ReviewSectionProps) {
             </label>
             <StarRating value={formRating} onChange={setFormRating} size={24} />
           </div>
+          <input
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+            value={formWebsite}
+            onChange={(e) => setFormWebsite(e.target.value)}
+            className="hidden"
+          />
           <div>
             <label className="block text-xs font-mono uppercase tracking-wider text-neutral-500 mb-1">
               Your Name

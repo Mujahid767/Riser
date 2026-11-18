@@ -95,28 +95,43 @@ export async function saveSiteContent(input: unknown): Promise<SiteContent> {
   return withLock(async () => {
     const sanitized = sanitizeContent(input);
 
-    // 1. Persist to PostgreSQL database (survives all cloud deployments)
-    try {
-      await prisma.cmsContent.upsert({
-        where: { id: "site_content" },
-        create: { id: "site_content", data: sanitized as never },
-        update: { data: sanitized as never },
-      });
-    } catch (e) {
-      console.error("[cms] failed to save to database", e);
-    }
+    // 1. Persist to PostgreSQL database (must succeed — never report saved from ephemeral disk)
+    await prisma.cmsContent.upsert({
+      where: { id: "site_content" },
+      create: { id: "site_content", data: sanitized as never },
+      update: { data: sanitized as never },
+    });
 
-    // 2. Also persist to local file store
+    // 2. Best-effort local mirror for local dev only
     try {
       const store = await readStore();
       store.content = sanitized;
       await writeStore(store);
     } catch {
-      // Ephemeral disk in serverless
+      // Ephemeral/read-only disk on Railway
     }
 
     return sanitized;
   });
+}
+
+export async function getMediaById(id: string): Promise<MediaItem | null> {
+  const row = await prisma.mediaItem.findUnique({ where: { id } }).catch(() => null);
+  if (row) {
+    return {
+      id: row.id,
+      url: row.url,
+      filename: row.filename,
+      width: row.width,
+      height: row.height,
+      bytes: row.bytes,
+      createdAt: row.createdAt.toISOString(),
+      storage: (row.storage === "cloudinary" ? "cloudinary" : "local") as MediaItem["storage"],
+      publicId: row.publicId ?? undefined,
+    };
+  }
+  const store = await readStore();
+  return store.media.find((entry) => entry.id === id) ?? null;
 }
 
 export async function addMedia(item: MediaItem): Promise<MediaItem> {

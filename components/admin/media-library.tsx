@@ -40,11 +40,13 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
 
   async function remove(id: string) {
     if (!confirm("Delete this photo? It will be removed from storage.")) return;
+    setError("");
     const response = await fetch(`/api/admin/media?id=${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
     if (!response.ok) {
-      setError("Could not delete that photo.");
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      setError(data.error ?? "Could not delete that photo.");
       return;
     }
     setMedia((m) => m.filter((item) => item.id !== id));

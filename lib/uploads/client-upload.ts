@@ -30,13 +30,33 @@ async function optimizeDslrImage(file: File): Promise<File> {
     ctx.drawImage(bitmap, 0, 0, targetW, targetH);
     bitmap.close();
 
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/webp", 0.92)
-    );
+    const encode = (mime: string, quality: number) =>
+      new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), mime, quality));
+
+    let blob = await encode("image/webp", 0.9);
+    let outMime = "image/webp";
+    let outExt = "webp";
+
+    // Browsers that don't support WebP canvas encoding fall back to PNG (often huge) or null
+    if (!blob || blob.type !== "image/webp" || blob.size >= file.size) {
+      const jpegBlob = await encode("image/jpeg", 0.9);
+      if (jpegBlob && (!blob || jpegBlob.size < blob.size)) {
+        blob = jpegBlob;
+        outMime = "image/jpeg";
+        outExt = "jpg";
+      }
+    }
+
+    // Ensure huge 7-10+ MB DSLR shots never exceed Cloudinary's 10 MB free-tier upload cap
+    if (blob && blob.size > 8 * 1024 * 1024) {
+      const smaller = await encode(outMime, 0.82);
+      if (smaller && smaller.size < blob.size) blob = smaller;
+    }
+
     if (!blob || blob.size >= file.size) return file;
 
     const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
-    return new File([blob], `${baseName}.webp`, { type: "image/webp" });
+    return new File([blob], `${baseName}.${outExt}`, { type: outMime });
   } catch {
     return file;
   }

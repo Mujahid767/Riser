@@ -68,7 +68,7 @@ export default function ShippingPage() {
               <Link href="/contact" className="text-brand-600 font-semibold hover:underline">
                 Contact our team
               </Link>{" "}
-              or call us at <a href="tel:+8801XXXXXXXXX" className="text-brand-600 font-semibold">01XXXXXXXXX</a>.
+              or call us at <a href="tel:+8801577049566" className="text-brand-600 font-semibold">01577-049566</a>.
             </p>
           </div>
         </div>

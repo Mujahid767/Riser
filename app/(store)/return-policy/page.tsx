@@ -192,10 +192,10 @@ export default function ReturnPolicyPage() {
               </Link>{" "}
               or call us at{" "}
               <a
-                href="tel:+8801XXXXXXXXX"
+                href="tel:+8801577049566"
                 className="text-brand-600 font-semibold"
               >
-                01XXXXXXXXX
+                01577-049566
               </a>
               .
             </p>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import prisma from "@/lib/db";
 import { getAdminSession } from "@/lib/auth/session";
-import { addMedia, listMedia, removeMedia } from "@/lib/cms/store";
+import { addMedia, getMediaById, getSiteContent, listMedia, removeMedia } from "@/lib/cms/store";
 import { deleteUploadedFile, saveUploadedImage, UploadError } from "@/lib/uploads/save-image";
 import type { MediaItem } from "@/lib/cms/types";
 
@@ -63,6 +64,58 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Missing photo id." }, { status: 400 });
+
+  const existing = await getMediaById(id);
+  if (!existing) return NextResponse.json({ ok: true });
+
+  // Prevent breaking live products or CMS banners that still reference this image URL
+  const products = await prisma.product.findMany({
+    select: {
+      id: true,
+      name: true,
+      imageUrl: true,
+      secondaryImageUrl: true,
+      galleryImages: true,
+    },
+  });
+  const usedByProducts = products.filter((p) => {
+    const gallery = Array.isArray(p.galleryImages) ? (p.galleryImages as unknown[]) : [];
+    return (
+      p.imageUrl === existing.url ||
+      p.secondaryImageUrl === existing.url ||
+      gallery.includes(existing.url)
+    );
+  });
+
+  if (usedByProducts.length > 0) {
+    const names = usedByProducts
+      .slice(0, 3)
+      .map((p) => p.name)
+      .join(", ");
+    const suffix = usedByProducts.length > 3 ? ` (+${usedByProducts.length - 3} more)` : "";
+    return NextResponse.json(
+      {
+        error: `Cannot delete this photo because it is still used by ${usedByProducts.length} product(s): ${names}${suffix}. Replace or remove it from those products first.`,
+      },
+      { status: 409 }
+    );
+  }
+
+  const content = await getSiteContent();
+  const usedInCms =
+    content.hero.some((h) => h.image === existing.url) ||
+    content.categories.cards.some((c) => c.image === existing.url) ||
+    content.seasonal.image === existing.url ||
+    content.brand.image === existing.url;
+  if (usedInCms) {
+    return NextResponse.json(
+      {
+        error:
+          "Cannot delete this photo because it is currently used on your storefront homepage content. Replace it in Page Content first.",
+      },
+      { status: 409 }
+    );
+  }
 
   const removed = await removeMedia(id);
   if (removed) await deleteUploadedFile(removed);

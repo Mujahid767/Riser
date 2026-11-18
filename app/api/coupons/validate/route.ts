@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { validateCoupon } from "@/lib/coupons";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,13 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const limit = rateLimit(`coupon:${clientIp(request)}`, 20, 5 * 60 * 1000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many coupon attempts. Please wait a few minutes." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
+    );
+  }
   let json: unknown;
   try {
     json = await request.json();

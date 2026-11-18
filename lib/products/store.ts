@@ -4,7 +4,13 @@
  * Public function signatures are unchanged — all callers work without modification.
  */
 import prisma from "@/lib/db";
-import type { AdminProduct, ProductColor } from "./types";
+import type { Prisma } from "@prisma/client";
+import {
+  hasPerSizeStock,
+  normalizeSizeStock,
+  type AdminProduct,
+  type ProductColor,
+} from "./types";
 import { Decimal } from "@prisma/client/runtime/library";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -30,6 +36,7 @@ function toAdminProduct(row: {
   colors: unknown;
   sizes: unknown;
   sizePrices?: unknown;
+  sizeStock?: unknown;
   editionBadge: string | null;
   isNew: boolean;
   isBestSeller: boolean;
@@ -52,6 +59,7 @@ function toAdminProduct(row: {
       if (Number.isFinite(n) && n > 0) sizePrices[k] = n;
     }
   }
+  const sizeStock = normalizeSizeStock(row.sizeStock);
   const gallery = Array.isArray(row.galleryImages)
     ? (row.galleryImages as string[])
     : [];
@@ -74,6 +82,7 @@ function toAdminProduct(row: {
     colors,
     sizes,
     sizePrices,
+    sizeStock,
     editionBadge: row.editionBadge ?? undefined,
     isNew: row.isNew,
     isBestSeller: row.isBestSeller,
@@ -130,11 +139,34 @@ export async function getProduct(id: string): Promise<AdminProduct | null> {
   return row ? toAdminProduct(row) : null;
 }
 
+function resolveSizeStockAndTotal(
+  sizes: string[],
+  rawSizeStock: unknown,
+  fallbackTotal: number
+): { sizeStock: Record<string, number>; totalStock: number } {
+  const normalized = normalizeSizeStock(rawSizeStock);
+  const allowed = sizes.length > 0 ? new Set(sizes) : null;
+  const filtered: Record<string, number> = {};
+  for (const [k, v] of Object.entries(normalized)) {
+    if (!allowed || allowed.has(k)) filtered[k] = v;
+  }
+  if (hasPerSizeStock(filtered)) {
+    const sum = Object.values(filtered).reduce((a, b) => a + b, 0);
+    return { sizeStock: filtered, totalStock: sum };
+  }
+  return { sizeStock: {}, totalStock: Math.max(0, Math.floor(fallbackTotal)) };
+}
+
 export async function createProduct(
   input: Omit<AdminProduct, "id" | "createdAt" | "updatedAt">
 ): Promise<AdminProduct> {
   const baseSlug = slugify(input.slug || input.name);
   const slug = await uniqueSlug(baseSlug);
+  const { sizeStock, totalStock } = resolveSizeStockAndTotal(
+    input.sizes ?? [],
+    input.sizeStock,
+    input.stock ?? 0
+  );
 
   const row = await prisma.product.create({
     data: {
@@ -152,6 +184,7 @@ export async function createProduct(
       colors: (input.colors ?? []) as never,
       sizes: (input.sizes ?? []) as never,
       sizePrices: (input.sizePrices ?? {}) as never,
+      sizeStock: sizeStock as never,
       editionBadge: input.editionBadge ?? null,
       isNew: input.isNew ?? false,
       isBestSeller: input.isBestSeller ?? false,
@@ -159,7 +192,7 @@ export async function createProduct(
       isLimited: input.isLimited ?? false,
       tags: input.tags ?? [],
       status: (input.status ?? "draft").toUpperCase() as never,
-      stock: input.stock ?? 0,
+      stock: totalStock,
     },
   });
   return toAdminProduct(row);
@@ -179,6 +212,15 @@ export async function updateProduct(
     // Auto-update slug only if no explicit slug provided
     // We keep the old slug to avoid breaking URLs
   }
+
+  const existingSizes = Array.isArray(existing.sizes) ? (existing.sizes as string[]) : [];
+  const nextSizes = input.sizes ?? existingSizes;
+  const rawSizeStock =
+    input.sizeStock !== undefined ? input.sizeStock : existing.sizeStock;
+  const resolvedStock =
+    input.sizeStock !== undefined || input.sizes !== undefined || input.stock !== undefined
+      ? resolveSizeStockAndTotal(nextSizes, rawSizeStock, input.stock ?? existing.stock)
+      : null;
 
   const row = await prisma.product.update({
     where: { id },
@@ -215,6 +257,12 @@ export async function updateProduct(
       ...(input.sizePrices !== undefined
         ? { sizePrices: (input.sizePrices ?? {}) as never }
         : {}),
+      ...(resolvedStock !== null
+        ? {
+            sizeStock: resolvedStock.sizeStock as never,
+            stock: resolvedStock.totalStock,
+          }
+        : {}),
       ...(input.editionBadge !== undefined
         ? { editionBadge: input.editionBadge ?? null }
         : {}),
@@ -226,7 +274,6 @@ export async function updateProduct(
       ...(input.isLimited !== undefined ? { isLimited: input.isLimited } : {}),
       ...(input.tags !== undefined ? { tags: input.tags } : {}),
       ...(input.status !== undefined ? { status: input.status.toUpperCase() as never } : {}),
-      ...(input.stock !== undefined ? { stock: input.stock } : {}),
     },
   });
   return toAdminProduct(row);
@@ -241,65 +288,159 @@ export async function deleteProduct(id: string): Promise<boolean> {
   }
 }
 
-// ─── Stock reservation (all-or-nothing) ──────────────────────────────────────
+// ─── Stock reservation (all-or-nothing, per-size & row-locked) ─────────────────
 
-export type StockRequest = { productId: string; qty: number };
+export type StockRequest = { productId: string; size?: string; qty: number };
 
 export type ReserveResult =
   | { ok: true }
-  | { ok: false; productId: string; available: number };
+  | { ok: false; productId: string; size?: string; available: number };
+
+type GroupedProductNeed = {
+  totalQty: number;
+  bySize: Map<string, number>;
+};
+
+function groupStockRequests(items: StockRequest[]): Map<string, GroupedProductNeed> {
+  const need = new Map<string, GroupedProductNeed>();
+  for (const it of items) {
+    if (!it.productId || it.qty <= 0) continue;
+    const entry = need.get(it.productId) ?? { totalQty: 0, bySize: new Map() };
+    entry.totalQty += it.qty;
+    const sizeKey = it.size?.trim();
+    if (sizeKey) {
+      entry.bySize.set(sizeKey, (entry.bySize.get(sizeKey) ?? 0) + it.qty);
+    }
+    need.set(it.productId, entry);
+  }
+  return need;
+}
 
 /**
- * Atomically deduct stock for every item, or deduct nothing.
- * Uses a Prisma transaction with individual UPDATE … WHERE stock >= qty checks.
+ * Lock product rows in deterministic ID order and reserve both total `stock`
+ * and per-size `sizeStock` inside an active Prisma transaction.
  */
+export async function reserveStockTx(
+  tx: Prisma.TransactionClient,
+  items: StockRequest[]
+): Promise<ReserveResult> {
+  const need = groupStockRequests(items);
+  const productIds = [...need.keys()].sort();
+
+  for (const productId of productIds) {
+    const req = need.get(productId)!;
+    const rows = await tx.$queryRaw<
+      Array<{ id: string; stock: number; sizeStock: unknown }>
+    >`SELECT id, stock, "sizeStock" FROM products WHERE id = ${productId} FOR UPDATE`;
+
+    const row = rows[0];
+    if (!row) {
+      return { ok: false, productId, available: 0 };
+    }
+
+    const sizeMap = normalizeSizeStock(row.sizeStock);
+    if (hasPerSizeStock(sizeMap)) {
+      for (const [size, qty] of req.bySize) {
+        const availableForSize = sizeMap[size] ?? 0;
+        if (availableForSize < qty) {
+          return { ok: false, productId, size, available: availableForSize };
+        }
+      }
+      if (row.stock < req.totalQty) {
+        return { ok: false, productId, available: Math.max(0, row.stock) };
+      }
+      for (const [size, qty] of req.bySize) {
+        sizeMap[size] = Math.max(0, (sizeMap[size] ?? 0) - qty);
+      }
+      const nextTotal = Math.max(
+        0,
+        Object.values(sizeMap).reduce((sum, val) => sum + val, 0)
+      );
+      await tx.product.update({
+        where: { id: productId },
+        data: { stock: nextTotal, sizeStock: sizeMap as never },
+      });
+    } else {
+      if (row.stock < req.totalQty) {
+        return { ok: false, productId, available: Math.max(0, row.stock) };
+      }
+      await tx.product.update({
+        where: { id: productId },
+        data: { stock: row.stock - req.totalQty },
+      });
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Restore reserved stock (both total `stock` and per-size `sizeStock`) inside an
+ * active Prisma transaction. Safe against concurrent updates via FOR UPDATE.
+ */
+export async function releaseStockTx(
+  tx: Prisma.TransactionClient,
+  items: StockRequest[]
+): Promise<void> {
+  const need = groupStockRequests(items);
+  const productIds = [...need.keys()].sort();
+
+  for (const productId of productIds) {
+    const req = need.get(productId)!;
+    const rows = await tx.$queryRaw<
+      Array<{ id: string; stock: number; sizeStock: unknown }>
+    >`SELECT id, stock, "sizeStock" FROM products WHERE id = ${productId} FOR UPDATE`;
+
+    const row = rows[0];
+    if (!row) continue; // Product was removed after order placement
+
+    const sizeMap = normalizeSizeStock(row.sizeStock);
+    if (hasPerSizeStock(sizeMap) && req.bySize.size > 0) {
+      for (const [size, qty] of req.bySize) {
+        sizeMap[size] = Math.max(0, (sizeMap[size] ?? 0) + qty);
+      }
+      const nextTotal = Object.values(sizeMap).reduce((sum, val) => sum + val, 0);
+      await tx.product.update({
+        where: { id: productId },
+        data: { stock: nextTotal, sizeStock: sizeMap as never },
+      });
+    } else {
+      await tx.product.update({
+        where: { id: productId },
+        data: { stock: row.stock + req.totalQty },
+      });
+    }
+  }
+}
+
 export async function reserveStock(
   items: StockRequest[]
 ): Promise<ReserveResult> {
-  // Merge duplicate productIds
-  const need = new Map<string, number>();
-  for (const it of items)
-    need.set(it.productId, (need.get(it.productId) ?? 0) + it.qty);
+  const need = groupStockRequests(items);
+  if (need.size === 0) return { ok: true };
 
   try {
-    await prisma.$transaction(async (tx) => {
-      for (const [productId, qty] of need) {
-        const updated = await tx.product.updateMany({
-          where: { id: productId, stock: { gte: qty } },
-          data: { stock: { decrement: qty } },
-        });
-        if (updated.count === 0) {
-          // Not enough stock — abort the transaction
-          throw { _stockFail: true, productId };
+    return await prisma.$transaction(
+      async (tx) => {
+        const res = await reserveStockTx(tx, items);
+        if (!res.ok) {
+          throw { _stockFail: true, res };
         }
-      }
-    });
-    return { ok: true };
+        return res;
+      },
+      { maxWait: 10_000, timeout: 20_000 }
+    );
   } catch (err: unknown) {
-    const e = err as { _stockFail?: boolean; productId?: string };
-    if (e._stockFail && e.productId) {
-      const row = await prisma.product.findUnique({
-        where: { id: e.productId },
-        select: { stock: true },
-      });
-      return { ok: false, productId: e.productId, available: row?.stock ?? 0 };
-    }
+    const e = err as { _stockFail?: boolean; res?: ReserveResult };
+    if (e._stockFail && e.res) return e.res;
     throw err;
   }
 }
 
 /** Give stock back (order failed to save, or order was cancelled). */
 export async function releaseStock(items: StockRequest[]): Promise<void> {
-  const need = new Map<string, number>();
-  for (const it of items)
-    need.set(it.productId, (need.get(it.productId) ?? 0) + it.qty);
-
-  await prisma.$transaction(
-    [...need].map(([productId, qty]) =>
-      prisma.product.update({
-        where: { id: productId },
-        data: { stock: { increment: qty } },
-      })
-    )
-  );
+  await prisma.$transaction((tx) => releaseStockTx(tx, items), {
+    maxWait: 10_000,
+    timeout: 20_000,
+  });
 }

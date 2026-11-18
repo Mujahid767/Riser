@@ -500,7 +500,7 @@ export default function Header({
             {/* Bottom Contact */}
             <div className="pt-6 border-t border-white/10 text-[10px] font-mono text-neutral-400 space-y-2">
               <p className="tracking-widest uppercase">DHAKA FLAGSHIP ATELIER</p>
-              <p>DIRECT CLIENT LIAISON: 01XXXXXXXXX</p>
+              <p>DIRECT CLIENT LIAISON: 01577-049566</p>
             </div>
           </div>
         </div>

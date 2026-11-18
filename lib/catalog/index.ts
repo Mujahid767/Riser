@@ -1,6 +1,6 @@
 import { cache } from "react";
 import prisma from "@/lib/db";
-import type { AdminProduct, ProductColor } from "@/lib/products/types";
+import { normalizeSizeStock, type AdminProduct, type ProductColor } from "@/lib/products/types";
 import { SEED_PRODUCTS, type SeedProduct } from "@/lib/utils/seed-products";
 import { Decimal } from "@prisma/client/runtime/library";
 
@@ -34,6 +34,7 @@ function fromDb(row: {
   colors: unknown;
   sizes: unknown;
   sizePrices?: unknown;
+  sizeStock?: unknown;
   editionBadge: string | null;
   isNew: boolean;
   isBestSeller: boolean;
@@ -53,6 +54,7 @@ function fromDb(row: {
       if (Number.isFinite(n) && n > 0) sizePrices[k] = n;
     }
   }
+  const sizeStock = normalizeSizeStock(row.sizeStock);
   const gallery = Array.isArray(row.galleryImages)
     ? (row.galleryImages as string[])
     : [];
@@ -75,6 +77,7 @@ function fromDb(row: {
     colors,
     sizes,
     sizePrices,
+    sizeStock,
     category: (row.category ?? "baby-frock") as AdminProduct["category"],
     department: (row.department ?? "petite") as AdminProduct["department"],
     description: row.description ?? "",
