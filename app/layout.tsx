@@ -68,95 +68,21 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const marketing = await getPublicMarketingConfig().catch(() => ({} as PublicMarketingConfig));
-  const gtmId = marketing.gtmId;
-  const ga4Id = marketing.ga4Id;
-  const metaPixelId = marketing.metaPixelId;
   const googleSiteVerification = marketing.googleSiteVerification;
   const facebookDomainVerification = marketing.facebookDomainVerification;
 
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
       <head>
-        {/* Verification meta tags */}
+        {/* Domain & Search Console verification meta tags (browser tracking pixels run only in store layout) */}
         {googleSiteVerification && (
           <meta name="google-site-verification" content={googleSiteVerification} />
         )}
         {facebookDomainVerification && (
           <meta name="facebook-domain-verification" content={facebookDomainVerification} />
         )}
-
-        {/* Google Tag Manager (GTM) */}
-        {gtmId && (
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-              new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-              j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-              'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-              })(window,document,'script','dataLayer','${gtmId}');`,
-            }}
-          />
-        )}
-
-        {/* Google Analytics 4 (GA4) */}
-        {ga4Id && (
-          <>
-            <script
-              async
-              src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}
-            />
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `
-                  window.dataLayer = window.dataLayer || [];
-                  function gtag(){dataLayer.push(arguments);}
-                  gtag('js', new Date());
-                  gtag('config', '${ga4Id}');
-                `,
-              }}
-            />
-          </>
-        )}
-
-        {/* Meta Pixel */}
-        {metaPixelId && (
-          <>
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `
-                  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-                  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-                  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-                  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-                  document,'script','https://connect.facebook.net/en_US/fbevents.js');
-                  fbq('init', '${metaPixelId}');
-                  fbq('track', 'PageView');
-                `,
-              }}
-            />
-            <noscript>
-              <img
-                height="1"
-                width="1"
-                style={{ display: "none" }}
-                src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`}
-                alt=""
-              />
-            </noscript>
-          </>
-        )}
       </head>
       <body className="font-sans antialiased bg-[#070709] text-white selection:bg-brand-600 selection:text-white">
-        {gtmId && (
-          <noscript>
-            <iframe
-              src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
-              height="0"
-              width="0"
-              style={{ display: "none", visibility: "hidden" }}
-            />
-          </noscript>
-        )}
         {children}
         <Toaster />
       </body>

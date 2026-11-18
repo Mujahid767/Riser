@@ -19,8 +19,15 @@ declare global {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function isStorefrontPath(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    !window.location.pathname.startsWith("/admin")
+  );
+}
+
 function gtagEvent(eventName: string, params?: EventProperties): void {
-  if (typeof window === "undefined" || !window.gtag) return;
+  if (!isStorefrontPath() || !window.gtag) return;
   window.gtag("event", eventName, params);
 }
 
@@ -33,7 +40,7 @@ function fbEvent(
   params?: EventProperties,
   eventId?: string
 ): void {
-  if (typeof window === "undefined" || !window.fbq) return;
+  if (!isStorefrontPath() || !window.fbq) return;
   if (eventId) {
     window.fbq("track", eventName, params, { eventID: eventId });
   } else {
@@ -46,7 +53,7 @@ function fbCustomEvent(
   params?: EventProperties,
   eventId?: string
 ): void {
-  if (typeof window === "undefined" || !window.fbq) return;
+  if (!isStorefrontPath() || !window.fbq) return;
   if (eventId) {
     window.fbq("trackCustom", eventName, params, { eventID: eventId });
   } else {

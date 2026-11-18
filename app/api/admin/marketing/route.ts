@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getAdminSession } from "@/lib/auth/session";
 import { getMarketingSettingsView, saveMarketingSettings } from "@/lib/marketing/settings";
 import { sendCapiEvent } from "@/lib/analytics/capi";
@@ -41,6 +42,7 @@ export async function PUT(request: Request) {
       enableAdvancedMatching: typeof body.enableAdvancedMatching === "boolean" ? body.enableAdvancedMatching : true,
     });
 
+    revalidatePath("/", "layout");
     const settings = await getMarketingSettingsView();
     return NextResponse.json({ settings });
   } catch (err) {

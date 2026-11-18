@@ -276,8 +276,9 @@ export default function MarketingSettingsClient({
                 </p>
                 <ul className="space-y-1 text-neutral-300 text-[11px]">
                   <li><b>1. CODOrderPlaced:</b> Sent once when customer submits checkout (browser + CAPI deduplicated).</li>
-                  <li><b>2. QualifiedOrder:</b> Sent when staff confirms order (<code className="text-white">CONFIRMED</code>).</li>
-                  <li><b>3. Purchase:</b> Sent <b>only</b> when <code className="text-white">DELIVERED</code> + <code className="text-white">PAID</code>. Unpaid/cancelled/returned orders never count as Purchases.</li>
+                  <li><b>2. QualifiedOrder:</b> Sent when staff confirms order (<code className="text-white">CONFIRMED</code>, <code className="text-white">phone_call</code>).</li>
+                  <li><b>3. Purchase:</b> Sent <b>only</b> when <code className="text-white">DELIVERED</code> + <code className="text-white">PAID</code> (<code className="text-white">system_generated</code>).</li>
+                  <li><b>Storefront-only Pixel:</b> Meta Pixel, GTM, and GA4 load only on public storefront routes, never on <code className="text-white">/admin/*</code>. Review Meta Events Manager &gt; Automatic Events and your GTM container before launching ads so no partner rule fires on admin actions.</li>
                 </ul>
               </div>
 
