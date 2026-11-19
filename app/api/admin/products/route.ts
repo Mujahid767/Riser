@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import { listProducts, createProduct, getProduct, updateProduct, deleteProduct } from "@/lib/products/store";
 import type { AdminProduct } from "@/lib/products/types";
-import { warmCloudinaryProductTransforms } from "@/lib/images/cloudinary-warm";
+import {
+  collectProductCloudinaryUrls,
+  diffNewProductImages,
+  scheduleCloudinaryWarmup,
+} from "@/lib/images/cloudinary-warm";
 
 export const runtime = "nodejs";
 
@@ -75,12 +79,9 @@ export async function POST(request: Request) {
     stock: Number(body.stock ?? 0),
   });
 
+  // New active product: warm every photo it was created with
   if (product.status === "active") {
-    void warmCloudinaryProductTransforms([
-      product.imageUrl,
-      product.secondaryImageUrl,
-      ...(product.images ?? []),
-    ]);
+    scheduleCloudinaryWarmup(collectProductCloudinaryUrls(product), `create ${product.id}`);
   }
 
   return NextResponse.json({ product }, { status: 201 });
@@ -111,12 +112,15 @@ export async function PUT(request: Request) {
   const product = await updateProduct(id, body);
   if (!product) return NextResponse.json({ error: "Product not found." }, { status: 404 });
 
+  // Warm only photos that are new or replaced. Price/stock/name/description edits change no
+  // image URLs, so nothing is warmed. A draft/archived product becoming active has never been
+  // warmed, so all of its photos are warmed once on publish.
   if (product.status === "active") {
-    void warmCloudinaryProductTransforms([
-      product.imageUrl,
-      product.secondaryImageUrl,
-      ...(product.images ?? []),
-    ]);
+    const newUrls =
+      current.status === "active"
+        ? diffNewProductImages(current, product)
+        : collectProductCloudinaryUrls(product);
+    scheduleCloudinaryWarmup(newUrls, `update ${product.id}`);
   }
 
   return NextResponse.json({ product });
