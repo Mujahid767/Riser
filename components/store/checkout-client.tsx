@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ShoppingBag } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
@@ -388,7 +388,7 @@ export default function CheckoutClient() {
                 {lines.map((l) => (
                   <div key={l.key} className="flex items-start gap-3 text-xs font-mono">
                     <div className="w-12 h-16 relative border border-white/10 bg-black shrink-0 overflow-hidden">
-                      {l.imageUrl && <Image src={l.imageUrl} alt="" fill sizes="48px" className="object-cover" />}
+                      {l.imageUrl && <RiserImage src={l.imageUrl} alt="" fill sizes="48px" className="object-cover" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-white uppercase line-clamp-2">{l.name}</p>

@@ -34,8 +34,8 @@ export default async function BestSellersSection() {
 
         {/* 4 Iconic Showcase Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {products.map((product) => (
-            <ProductCard key={product.id} {...product} />
+          {products.map((product, idx) => (
+            <ProductCard key={product.id} {...product} priority={idx < 4} />
           ))}
         </div>
       </div>

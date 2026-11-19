@@ -2,12 +2,14 @@ import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import cloudinary, { cloudinaryConfigured } from "@/lib/cloudinary";
+import { CLOUDINARY_EAGER_PARAM } from "@/lib/images/cloudinary";
 
 export const runtime = "nodejs";
 
 /**
  * Returns a signed upload payload so the admin browser can upload large DSLR photos
- * directly to Cloudinary without hitting server RAM or proxy body-size limits.
+ * directly to Cloudinary without hitting server RAM or proxy body-size limits,
+ * while queuing canonical responsive eager transforms asynchronously.
  */
 export async function POST() {
   const session = await getAdminSession();
@@ -26,9 +28,11 @@ export async function POST() {
   const publicId = `riser/products/${id}`;
   const folder = "riser";
   const tags = "riser-product";
+  const eager = CLOUDINARY_EAGER_PARAM;
+  const eagerAsync = "true";
 
   const signature = cloudinary.utils.api_sign_request(
-    { folder, public_id: publicId, tags, timestamp },
+    { eager, eager_async: eagerAsync, folder, public_id: publicId, tags, timestamp },
     apiSecret
   );
 
@@ -42,5 +46,7 @@ export async function POST() {
     folder,
     publicId,
     tags,
+    eager,
+    eagerAsync,
   });
 }

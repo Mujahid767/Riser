@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -46,7 +46,9 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   );
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(product.imageUrl);
-  const [imageError, setImageError] = useState(false);
+  const [mainLoaded, setMainLoaded] = useState(false);
+  const [warmedSlides, setWarmedSlides] = useState<string[]>([]);
+  const [failedImages, setFailedImages] = useState<Record<string, true>>({});
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
 
   // Fire ViewContent once per product page load
@@ -84,6 +86,22 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   const images = [product.imageUrl, product.secondaryImageUrl, ...(product.gallery ?? [])].filter(
     (img, i, arr): img is string => Boolean(img) && arr.indexOf(img) === i
   );
+
+  // After the primary LCP photo finishes loading, warm remaining stage slides at exact
+  // responsive srcset widths in background so thumbnail clicks switch instantaneously.
+  useEffect(() => {
+    if (!mainLoaded || images.length <= 1) return;
+    const secondarySlides = images.slice(1, 6);
+    const timer = setTimeout(() => {
+      setWarmedSlides((prev) => Array.from(new Set([...prev, ...secondarySlides])));
+    }, 120);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainLoaded, product.id]);
+
+  const warmGallerySlide = (img: string) => {
+    setWarmedSlides((prev) => (prev.includes(img) ? prev : [...prev, img]));
+  };
 
   /** Returns true when the item was added. */
   const handleAddToCart = (): boolean => {
@@ -151,16 +169,40 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
           <div className="lg:col-span-7 space-y-4">
             {/* Main Stage Image */}
             <div className="relative aspect-[3/4] w-full bg-[#0d0d12] border border-white/15 overflow-hidden">
-              {activeImage && !imageError ? (
-                <Image
-                  src={activeImage}
-                  alt={product.name}
-                  fill
-                  priority
-                  sizes="(max-width: 1024px) 100vw, 55vw"
-                  className="object-cover object-center"
-                  onError={() => setImageError(true)}
-                />
+              {activeImage && !failedImages[activeImage] ? (
+                images
+                  .filter((img, idx) => idx === 0 || img === activeImage || warmedSlides.includes(img))
+                  .map((img) => {
+                    const isPrimary = img === images[0];
+                    const isActive = img === activeImage;
+                    return (
+                      <RiserImage
+                        key={img}
+                        src={img}
+                        alt={
+                          isPrimary
+                            ? product.name
+                            : `${product.name} — view ${images.indexOf(img) + 1}`
+                        }
+                        fill
+                        preload={isPrimary}
+                        loading="eager"
+                        fetchPriority={isPrimary || isActive ? "high" : "low"}
+                        sizes="(max-width: 1024px) 100vw, 55vw"
+                        className={cn(
+                          "object-cover object-center transition-opacity duration-200",
+                          isActive ? "opacity-100 z-10" : "opacity-0 z-0 pointer-events-none"
+                        )}
+                        onLoad={() => {
+                          if (isPrimary) setMainLoaded(true);
+                        }}
+                        onError={() => {
+                          if (isPrimary) setMainLoaded(true);
+                          setFailedImages((prev) => ({ ...prev, [img]: true }));
+                        }}
+                      />
+                    );
+                  })
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-neutral-900 to-black p-8 text-center">
                   <div className="w-20 h-20 rounded-full border border-white/20 flex items-center justify-center mb-4">
@@ -197,9 +239,14 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               <div className="flex items-center gap-3">
                 {images.map((img, idx) => (
                   <button
-                    key={idx}
+                    key={img}
                     type="button"
-                    onClick={() => setActiveImage(img)}
+                    onMouseEnter={() => warmGallerySlide(img)}
+                    onFocus={() => warmGallerySlide(img)}
+                    onClick={() => {
+                      warmGallerySlide(img);
+                      setActiveImage(img);
+                    }}
                     className={cn(
                       "relative w-20 h-24 border overflow-hidden transition-all bg-[#0d0d12]",
                       activeImage === img
@@ -207,7 +254,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                         : "border-white/15 opacity-60 hover:opacity-100"
                     )}
                   >
-                    <Image
+                    <RiserImage
                       src={img}
                       alt={`${product.name} view ${idx + 1}`}
                       fill

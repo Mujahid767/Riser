@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import { Heart, ShoppingBag, Eye, ArrowUpRight } from "lucide-react";
 import { cn, formatPrice, calculateDiscount } from "@/lib/utils";
 import { useWishlist } from "@/lib/wishlist/wishlist-store";
@@ -27,6 +27,7 @@ interface ProductCardProps {
   sizePrices?: Record<string, number>;
   /** Units left. 0 = sold out. undefined = not tracked. */
   stock?: number;
+  priority?: boolean;
   className?: string;
 }
 
@@ -48,10 +49,13 @@ export default function ProductCard({
   sizes = [],
   sizePrices,
   stock,
+  priority = false,
   className,
 }: ProductCardProps) {
   const { toggle: toggleWishlist, check: isWishlisted } = useWishlist();
   const [imageError, setImageError] = useState(false);
+  const [hoverTriggered, setHoverTriggered] = useState(false);
+  const [secondaryLoaded, setSecondaryLoaded] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const activePrice = getPriceForSize(price, sizePrices, selectedSize);
   const allSizePrices = sizes.map((s) => getPriceForSize(price, sizePrices, s));
@@ -73,26 +77,43 @@ export default function ProductCard({
         className
       )}
     >
-      <Link href={`/product/${slug}`} aria-label={name} className="block relative">
+      <Link
+        href={`/product/${slug}`}
+        aria-label={name}
+        className="block relative"
+        onMouseEnter={() => {
+          if (secondaryImageUrl) setHoverTriggered(true);
+        }}
+        onFocus={() => {
+          if (secondaryImageUrl) setHoverTriggered(true);
+        }}
+      >
         {/* Image Container with 3:4 portrait aspect ratio */}
         <div className="relative aspect-[3/4] w-full overflow-hidden bg-neutral-950">
           {imageUrl && !imageError ? (
             <>
-              <Image
+              <RiserImage
                 src={imageUrl}
                 alt={name}
                 fill
+                loading={priority ? "eager" : "lazy"}
+                fetchPriority={priority ? "high" : "auto"}
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                 className="object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
                 onError={() => setImageError(true)}
               />
-              {secondaryImageUrl && (
-                <Image
+              {secondaryImageUrl && hoverTriggered && (
+                <RiserImage
                   src={secondaryImageUrl}
                   alt={`${name} — alternate angle`}
                   fill
+                  loading="eager"
                   sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                  className="object-cover object-center absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 ease-out"
+                  className={cn(
+                    "object-cover object-center absolute inset-0 transition-opacity duration-500 ease-out",
+                    secondaryLoaded ? "opacity-0 group-hover:opacity-100" : "opacity-0"
+                  )}
+                  onLoad={() => setSecondaryLoaded(true)}
                 />
               )}
             </>

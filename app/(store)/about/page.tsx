@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import {
   Factory,
   Building2,
@@ -101,7 +101,7 @@ export default async function AboutPage() {
         <div className="container-store grid lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-5">
             <div className="relative aspect-[4/5] border border-white/15 bg-[#0b0b10] overflow-hidden">
-              <Image
+              <RiserImage
                 src={brand.image}
                 alt="Riser Garments Factory in Narayanganj"
                 fill

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import { ArrowUpRight, Building2, Factory, Globe, MessageCircle, Mail, CheckCircle2 } from "lucide-react";
 import { getSiteContent } from "@/lib/cms/store";
 
@@ -23,7 +23,7 @@ export default async function BrandStorySection() {
           {/* Left Visual Collage */}
           <div className="lg:col-span-6 relative">
             <div className="relative aspect-[4/5] border border-white/15 overflow-hidden bg-[#0a0a0e]">
-              <Image
+              <RiserImage
                 src={brand.image}
                 alt={brand.imageAlt}
                 fill

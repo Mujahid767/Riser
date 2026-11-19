@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { getSiteContent } from "@/lib/cms/store";
 
@@ -68,7 +68,7 @@ export default async function SeasonalBanner() {
 
             {/* Right Visual Column */}
             <div className="lg:col-span-5 relative min-h-[360px] lg:min-h-full border-t lg:border-t-0 lg:border-l border-white/10 overflow-hidden">
-              <Image
+              <RiserImage
                 src={seasonal.image}
                 alt={seasonal.imageAlt}
                 fill

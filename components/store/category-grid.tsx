@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import { ArrowUpRight } from "lucide-react";
 import { getSiteContent } from "@/lib/cms/store";
 
@@ -44,7 +44,7 @@ export default async function CategoryGrid() {
               >
                 {/* Background Editorial Image */}
                 <div className="absolute inset-0 z-0">
-                  <Image
+                  <RiserImage
                     src={cat.image}
                     alt={cat.label}
                     fill

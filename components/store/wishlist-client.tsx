@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import { Heart, ShoppingBag, Trash2 } from "lucide-react";
 import { useWishlist } from "@/lib/wishlist/wishlist-store";
 import { formatPrice } from "@/lib/utils";
@@ -92,7 +92,7 @@ export default function WishlistClient() {
               <article key={product.id} className="group relative bg-white border border-neutral-100 hover:border-neutral-200 transition-all">
                 <Link href={`/product/${product.slug}`} className="block relative">
                   <div className="relative aspect-[3/4] overflow-hidden bg-neutral-50">
-                    <Image
+                    <RiserImage
                       src={product.imageUrl}
                       alt={product.name}
                       fill

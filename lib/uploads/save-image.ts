@@ -4,6 +4,7 @@ import path from "path";
 import sharp from "sharp";
 import type { MediaItem } from "@/lib/cms/types";
 import cloudinary, { cloudinaryConfigured } from "@/lib/cloudinary";
+import { CLOUDINARY_EAGER_SPECS } from "@/lib/images/cloudinary";
 
 const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
 const ALLOWED = new Set(["jpeg", "png", "webp", "gif", "avif"]);
@@ -46,11 +47,8 @@ async function uploadToCloudinary(buffer: Buffer, width: number, height: number)
           overwrite: false,
           // Tell Cloudinary the image is already WebP — no re-encoding
           resource_type: "image",
-          // Automatically serve AVIF/WebP based on browser
-          eager: [
-            { quality: "auto", fetch_format: "auto", width: 1200, crop: "limit" },
-            { quality: "auto", fetch_format: "auto", width: 600, crop: "limit" },
-          ],
+          // Pre-generate canonical responsive transforms asynchronously on upload
+          eager: CLOUDINARY_EAGER_SPECS,
           eager_async: true,
           tags: ["riser-product"],
         },

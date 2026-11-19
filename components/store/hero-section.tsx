@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { HeroSlide } from "@/lib/cms/types";
@@ -41,11 +41,13 @@ export default function HeroSection({ slides }: { slides: HeroSlide[] }) {
     <section className="relative overflow-hidden bg-[#050507] min-h-[85vh] sm:min-h-[92vh] flex flex-col justify-between border-b border-white/10 select-none">
       {/* Background Image Showcase */}
       <div className="absolute inset-0 z-0">
-        <Image
+        <RiserImage
           src={slide.image}
           alt={slide.headline}
           fill
-          priority
+          preload
+          loading="eager"
+          fetchPriority="high"
           sizes="100vw"
           className={cn(
             "object-cover object-center transition-all duration-1000 ease-out transform scale-105",

@@ -74,6 +74,8 @@ type SignatureResponse =
       folder: string;
       publicId: string;
       tags: string;
+      eager?: string;
+      eagerAsync?: string;
     };
 
 async function tryDirectCloudinaryUpload(file: File): Promise<MediaItem | null> {
@@ -94,6 +96,10 @@ async function tryDirectCloudinaryUpload(file: File): Promise<MediaItem | null> 
   form.append("folder", sig.folder);
   form.append("public_id", sig.publicId);
   form.append("tags", sig.tags);
+  if (sig.eager) {
+    form.append("eager", sig.eager);
+    form.append("eager_async", sig.eagerAsync ?? "true");
+  }
 
   const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`, {
     method: "POST",

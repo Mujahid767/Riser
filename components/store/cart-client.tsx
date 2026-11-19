@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import RiserImage from "@/components/ui/riser-image";
 import { ShoppingBag, Trash2, Minus, Plus, ShieldCheck } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { removeLine, setLineQty, useCart } from "@/lib/cart/cart-store";
@@ -47,7 +47,7 @@ export default function CartClient() {
                 >
                   <div className="w-20 h-28 sm:w-24 sm:h-32 relative border border-white/10 overflow-hidden bg-black shrink-0">
                     {item.imageUrl && (
-                      <Image
+                      <RiserImage
                         src={item.imageUrl}
                         alt={item.name}
                         fill

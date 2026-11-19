@@ -40,5 +40,5 @@ export default async function ProductPage({ params }: ProductPageProps) {
     .filter((p) => p.category === product.category && p.slug !== product.slug)
     .slice(0, 4);
 
-  return <ProductDetailClient product={product} related={related} />;
+  return <ProductDetailClient key={product.id} product={product} related={related} />;
 }

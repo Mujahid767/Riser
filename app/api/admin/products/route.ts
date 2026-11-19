@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import { listProducts, createProduct, getProduct, updateProduct, deleteProduct } from "@/lib/products/store";
 import type { AdminProduct } from "@/lib/products/types";
+import { warmCloudinaryProductTransforms } from "@/lib/images/cloudinary-warm";
 
 export const runtime = "nodejs";
 
@@ -74,6 +75,14 @@ export async function POST(request: Request) {
     stock: Number(body.stock ?? 0),
   });
 
+  if (product.status === "active") {
+    void warmCloudinaryProductTransforms([
+      product.imageUrl,
+      product.secondaryImageUrl,
+      ...(product.images ?? []),
+    ]);
+  }
+
   return NextResponse.json({ product }, { status: 201 });
 }
 
@@ -101,6 +110,14 @@ export async function PUT(request: Request) {
 
   const product = await updateProduct(id, body);
   if (!product) return NextResponse.json({ error: "Product not found." }, { status: 404 });
+
+  if (product.status === "active") {
+    void warmCloudinaryProductTransforms([
+      product.imageUrl,
+      product.secondaryImageUrl,
+      ...(product.images ?? []),
+    ]);
+  }
 
   return NextResponse.json({ product });
 }

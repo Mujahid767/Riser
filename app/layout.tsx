@@ -74,6 +74,8 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
       <head>
+        <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         {/* Domain & Search Console verification meta tags (browser tracking pixels run only in store layout) */}
         {googleSiteVerification && (
           <meta name="google-site-verification" content={googleSiteVerification} />
