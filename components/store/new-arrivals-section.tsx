@@ -37,15 +37,16 @@ export default function NewArrivalsSection({
       (!hiddenSet.has(tab.category) && allProducts.some((p) => p.category === tab.category))
   );
 
+  const maxProducts = 12;
   const highlighted = allProducts.filter((p) => p.isNew || p.isBestSeller);
-  const fallbackPool = highlighted.length >= 8
+  const fallbackPool = highlighted.length >= maxProducts
     ? highlighted
     : [...highlighted, ...allProducts.filter((p) => !p.isNew && !p.isBestSeller)];
 
   const filteredProducts =
     activeTab === "all"
-      ? fallbackPool.slice(0, 8)
-      : allProducts.filter((p) => p.category === activeTab).slice(0, 8);
+      ? fallbackPool.slice(0, maxProducts)
+      : allProducts.filter((p) => p.category === activeTab).slice(0, maxProducts);
 
   return (
     <section className="py-8 sm:py-12 bg-[#09090d] border-b border-white/10 select-none">
