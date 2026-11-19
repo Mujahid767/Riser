@@ -19,7 +19,6 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const [content, products] = await Promise.all([getSiteContent(), getCatalogProducts()]);
-  const visibleCategories = content.categories.cards.filter((c) => !c.hidden);
   const hiddenCategorySlugs = content.categories.cards
     .filter((c) => c.hidden)
     .map((c) => c.slug);
@@ -37,7 +36,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <HeroSection slides={heroSlides} categories={visibleCategories} />
+      <HeroSection slides={heroSlides} />
       <NewArrivalsSection
         copy={content.newArrivals}
         products={products}
