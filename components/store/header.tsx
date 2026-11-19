@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart/cart-store";
-import type { SiteContent } from "@/lib/cms/types";
 
 const NAV_LINKS = [
   {
@@ -67,11 +66,7 @@ const NAV_LINKS = [
   },
 ];
 
-export default function Header({
-  announcement,
-}: {
-  announcement?: SiteContent["announcement"];
-} = {}) {
+export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuPath, setMobileMenuPath] = useState<string | null>(null);
@@ -116,32 +111,6 @@ export default function Header({
 
   return (
     <>
-      {/* Ticker Marquee Announcement */}
-      <div className="w-full bg-[#050507] border-b border-white/10 text-neutral-300 text-[10px] sm:text-xs py-2 overflow-hidden select-none">
-        <div className="flex items-center justify-between gap-2 container-store">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse shrink-0" />
-            <span className="font-mono tracking-[0.2em] uppercase text-white font-semibold truncate">
-              {announcement?.badge || "DROP NOCTURNE // EDITION 2026"}
-            </span>
-          </div>
-          <div className="hidden md:flex items-center gap-6 font-mono text-[10px] text-neutral-400 tracking-widest uppercase">
-            {(announcement?.items || ["NAYRA CUT & SKIRT", "ROYAL BABY FROCKS", "TWO & THREE PIECE", "SHORT TOPS"]).map(
-              (item, idx, arr) => (
-                <React.Fragment key={idx}>
-                  <span>{item}</span>
-                  {idx < arr.length - 1 && <span className="text-white/20">•</span>}
-                </React.Fragment>
-              )
-            )}
-          </div>
-          <div className="flex items-center gap-4 text-[10px] font-mono tracking-widest text-neutral-400 uppercase shrink-0">
-            <span className="text-white font-bold">BDT ৳</span>
-            <span className="hidden sm:inline">{announcement?.rightNote || "DHAKA & NATIONWIDE DISPATCH"}</span>
-          </div>
-        </div>
-      </div>
-
       {/* Main Header — flows above content cleanly so it never covers product photos on scroll */}
       <header className="relative w-full z-50 border-b border-white/10 bg-[#070709]">
         <div className="container-store">

@@ -121,7 +121,7 @@ export default async function StoreLayout({
         <StoreTracking />
       </Suspense>
 
-      <Header announcement={content.announcement} />
+      <Header />
       <main className="flex-1 w-full min-w-0">{children}</main>
       <Footer content={content} />
       <WhatsAppButton
