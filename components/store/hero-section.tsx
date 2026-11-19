@@ -5,173 +5,175 @@ import Link from "next/link";
 import RiserImage from "@/components/ui/riser-image";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { HeroSlide } from "@/lib/cms/types";
+import type { CategoryCard, HeroSlide } from "@/lib/cms/types";
 
-export default function HeroSection({ slides }: { slides: HeroSlide[] }) {
+interface Props {
+  slides: HeroSlide[];
+  categories?: CategoryCard[];
+}
+
+export default function HeroSection({ slides, categories = [] }: Props) {
   const [activeSlide, setActiveSlide] = useState(0);
-  const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
+    if (slides.length <= 1) return;
     const timer = setInterval(() => {
-      handleNextSlide();
+      setActiveSlide((prev) => (prev + 1) % slides.length);
     }, 7000);
     return () => clearInterval(timer);
-  }, [activeSlide]);
+  }, [slides.length]);
+
+  const safeIndex = slides.length > 0 ? activeSlide % slides.length : 0;
+  const slide = slides[safeIndex] ?? slides[0];
+  if (!slide) return null;
 
   const handleNextSlide = () => {
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setActiveSlide((prev) => (prev + 1) % slides.length);
-      setIsTransitioning(false);
-    }, 350);
+    if (slides.length <= 1) return;
+    setActiveSlide((prev) => (prev + 1) % slides.length);
   };
 
   const handlePrevSlide = () => {
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setActiveSlide((prev) => (prev - 1 + slides.length) % slides.length);
-      setIsTransitioning(false);
-    }, 350);
+    if (slides.length <= 1) return;
+    setActiveSlide((prev) => (prev - 1 + slides.length) % slides.length);
   };
 
-  const slide = slides[activeSlide] ?? slides[0];
-  if (!slide) return null;
-
   return (
-    <section className="relative overflow-hidden bg-[#050507] min-h-[85vh] sm:min-h-[92vh] flex flex-col justify-between border-b border-white/10 select-none">
-      {/* Background Image Showcase */}
-      <div className="absolute inset-0 z-0">
-        <RiserImage
-          src={slide.image}
-          alt={slide.headline}
-          fill
-          preload
-          loading="eager"
-          fetchPriority="high"
-          sizes="100vw"
-          className={cn(
-            "object-cover object-center transition-all duration-1000 ease-out transform scale-105",
-            isTransitioning ? "opacity-0 scale-110" : "opacity-45 scale-100"
-          )}
-        />
-        {/* Cinematic Vignette Overlays */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#050507] via-[#050507]/80 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050507] via-transparent to-[#050507]/60" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-[#050507]/50 to-[#050507]" />
+    <section className="relative overflow-hidden bg-[#050507] border-b border-white/10 select-none">
+      {/* Compact Editorial Strip */}
+      <div className="container-store py-5 sm:py-7 lg:py-8">
+        <div className="grid grid-cols-[minmax(0,1fr)_96px] sm:grid-cols-[minmax(0,1fr)_220px] lg:grid-cols-[minmax(0,1fr)_300px] gap-4 sm:gap-7 items-center">
+          {/* Copy + Actions */}
+          <div className="min-w-0 space-y-2.5 sm:space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="inline-flex items-center gap-2 text-[10px] sm:text-xs font-mono tracking-[0.2em] text-neutral-300 uppercase font-semibold min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
+                <span className="truncate">{slide.tagline}</span>
+              </div>
 
-        {/* Subtle Architectural Grid Lines */}
-        <div
-          className="absolute inset-0 opacity-10 pointer-events-none"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px)",
-            backgroundSize: "80px 80px",
-          }}
-        />
-      </div>
+              {slides.length > 1 && (
+                <div className="hidden sm:flex items-center gap-2 shrink-0">
+                  <span className="font-mono text-[11px] text-neutral-500">
+                    0{safeIndex + 1} / 0{slides.length}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handlePrevSlide}
+                      className="w-7 h-7 border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:border-white transition-colors"
+                      aria-label="Previous slide"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNextSlide}
+                      className="w-7 h-7 border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:border-white transition-colors"
+                      aria-label="Next slide"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
-      {/* Main Content Area */}
-      <div className="relative z-10 container-store flex-1 flex flex-col justify-center py-16 sm:py-24">
-        <div className="max-w-3xl">
-          {/* Edition Metadata Pill */}
-          <div
-            className={cn(
-              "inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/20 backdrop-blur-md text-[10px] sm:text-xs font-mono tracking-[0.28em] text-white uppercase font-semibold mb-6 transition-all duration-500",
-              isTransitioning ? "opacity-0 -translate-y-2" : "opacity-100 translate-y-0"
-            )}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-            <span>{slide.tagline}</span>
+            <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-[2.65rem] font-black text-white tracking-[0.03em] uppercase leading-[1.03] font-sans whitespace-pre-line">
+              {slide.headline}
+            </h1>
+
+            <p className="hidden sm:line-clamp-2 text-neutral-300 text-xs sm:text-sm max-w-xl font-normal leading-relaxed">
+              {slide.subheading}
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-0.5">
+              <Link
+                href={slide.cta1Href}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:px-5 sm:py-2.5 bg-white text-black border border-white text-[10px] sm:text-[11px] font-bold tracking-[0.18em] uppercase hover:bg-transparent hover:text-white transition-colors"
+              >
+                <span>{slide.cta1Label}</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+
+              <Link
+                href={slide.cta2Href}
+                className="inline-flex items-center justify-center px-3.5 py-2 sm:px-5 sm:py-2.5 bg-white/[0.04] text-white border border-white/20 text-[10px] sm:text-[11px] font-bold tracking-[0.18em] uppercase hover:border-white hover:bg-white/10 transition-colors"
+              >
+                <span>{slide.cta2Label}</span>
+              </Link>
+
+              {slides.length > 1 && (
+                <div className="flex sm:hidden items-center gap-1 ml-auto">
+                  <button
+                    type="button"
+                    onClick={handlePrevSlide}
+                    className="w-7 h-7 border border-white/15 flex items-center justify-center text-white/70 hover:text-white"
+                    aria-label="Previous slide"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextSlide}
+                    className="w-7 h-7 border border-white/15 flex items-center justify-center text-white/70 hover:text-white"
+                    aria-label="Next slide"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Monumental Headline */}
-          <h1
-            className={cn(
-              "text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-white tracking-[0.04em] uppercase leading-[0.95] mb-6 transition-all duration-500 whitespace-pre-line drop-shadow-2xl font-sans",
-              isTransitioning ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
-            )}
+          {/* Crisp Framed Editorial Photo (no distracting dark overlay over products) */}
+          <Link
+            href={slide.cta1Href}
+            className="group relative block w-full aspect-[3/4] sm:aspect-[4/3] overflow-hidden border border-white/15 bg-[#0d0d12] shrink-0"
+            aria-label={slide.categoryHighlight}
           >
-            {slide.headline}
-          </h1>
-
-          {/* Subheading */}
-          <p
-            className={cn(
-              "text-neutral-300 text-sm sm:text-base md:text-lg max-w-xl font-normal leading-relaxed mb-8 transition-all duration-500",
-              isTransitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
-            )}
-          >
-            {slide.subheading}
-          </p>
-
-          {/* Technical Specs Indicators */}
-          <div
-            className={cn(
-              "hidden sm:flex items-center gap-6 mb-10 pb-6 border-b border-white/10 text-[10px] font-mono tracking-widest text-neutral-400 uppercase transition-all duration-500",
-              isTransitioning ? "opacity-0" : "opacity-100"
-            )}
-          >
-            {slide.specs.map((spec, i) => (
-              <span key={i} className="flex items-center gap-2">
-                <span className="text-brand-500">■</span> {spec}
+            <RiserImage
+              src={slide.image}
+              alt={slide.headline}
+              fill
+              preload
+              loading="eager"
+              fetchPriority="high"
+              sizes="(max-width: 640px) 96px, (max-width: 1024px) 220px, 300px"
+              className="object-cover object-top transition-transform duration-700 group-hover:scale-105"
+            />
+            <div className="hidden sm:flex absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-3 py-2 items-center justify-between gap-2">
+              <span className="text-[9px] font-mono tracking-[0.2em] text-white/90 uppercase truncate">
+                {slide.categoryHighlight}
               </span>
-            ))}
-          </div>
-
-          {/* Action CTAs */}
-          <div
-            className={cn(
-              "flex flex-col sm:flex-row gap-4 transition-all duration-500",
-              isTransitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
-            )}
-          >
-            <Link href={slide.cta1Href} className="btn-luxury-white">
-              <span>{slide.cta1Label}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-
-            <Link href={slide.cta2Href} className="btn-luxury-outline">
-              <span>{slide.cta2Label}</span>
-            </Link>
-          </div>
+              <ArrowRight className="w-3 h-3 text-white/80 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </Link>
         </div>
       </div>
 
-      {/* Hero Bottom Bar: Slide Indicators & Luxury Ticker */}
-      <div className="relative z-10 border-t border-white/10 bg-[#050507]/90 backdrop-blur-md">
-        <div className="container-store py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          {/* Active Highlight */}
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-mono tracking-[0.25em] text-brand-500 font-bold uppercase">
-              FEATURED:
-            </span>
-            <span className="text-xs font-mono text-white tracking-widest uppercase font-semibold">
-              {slide.categoryHighlight}
-            </span>
-          </div>
-
-          {/* Slide Switchers */}
-          <div className="flex items-center gap-4">
-            <span className="font-mono text-xs text-neutral-400">
-              0{activeSlide + 1} / 0{slides.length}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handlePrevSlide}
-                className="w-8 h-8 border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:border-white transition-colors"
-                aria-label="Previous slide"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleNextSlide}
-                className="w-8 h-8 border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:border-white transition-colors"
-                aria-label="Next slide"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+      {/* Category Quick Links Bar */}
+      <div className="border-t border-white/10 bg-[#08080c]">
+        <div className="container-store py-2.5 flex items-center gap-2 overflow-x-auto scrollbar-none sm:flex-wrap">
+          <span className="hidden sm:inline text-[10px] font-mono tracking-[0.22em] text-neutral-500 uppercase shrink-0 mr-1">
+            Shop by Category:
+          </span>
+          <Link
+            href="/shop"
+            className={cn(
+              "px-3 py-1.5 text-[10px] sm:text-[11px] font-mono tracking-[0.16em] uppercase whitespace-nowrap shrink-0 border transition-colors",
+              "bg-white text-black border-white font-bold hover:bg-neutral-200"
+            )}
+          >
+            All Products
+          </Link>
+          {categories.map((cat) => (
+            <Link
+              key={cat.id}
+              href={`/shop?category=${cat.slug}`}
+              className="px-3 py-1.5 text-[10px] sm:text-[11px] font-mono tracking-[0.16em] uppercase whitespace-nowrap shrink-0 border border-white/15 bg-white/[0.03] text-neutral-200 hover:bg-white hover:text-black hover:border-white transition-colors"
+            >
+              {cat.label}
+            </Link>
+          ))}
         </div>
       </div>
     </section>

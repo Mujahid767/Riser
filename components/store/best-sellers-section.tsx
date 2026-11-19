@@ -9,7 +9,7 @@ export default async function BestSellersSection() {
   const products = (await getCatalogProducts()).filter((p) => p.isBestSeller).slice(0, 4);
 
   return (
-    <section className="py-20 sm:py-32 bg-[#070709] border-b border-white/10 select-none">
+    <section className="py-12 sm:py-16 bg-[#070709] border-b border-white/10 select-none">
       <div className="container-store">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 pb-6 border-b border-white/10 gap-4">

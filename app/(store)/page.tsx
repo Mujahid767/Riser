@@ -19,14 +19,33 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const [content, products] = await Promise.all([getSiteContent(), getCatalogProducts()]);
+  const visibleCategories = content.categories.cards.filter((c) => !c.hidden);
+  const hiddenCategorySlugs = content.categories.cards
+    .filter((c) => c.hidden)
+    .map((c) => c.slug);
+  const hiddenSlugSet = new Set(hiddenCategorySlugs);
+  const targetsHiddenCategory = (href: string) => {
+    const qIndex = href.indexOf("category=");
+    if (qIndex === -1) return false;
+    const slug = href.slice(qIndex + "category=".length).split("&")[0];
+    return hiddenSlugSet.has(slug);
+  };
+  const filteredSlides = content.hero.filter(
+    (slide) => !(targetsHiddenCategory(slide.cta1Href) && targetsHiddenCategory(slide.cta2Href))
+  );
+  const heroSlides = filteredSlides.length > 0 ? filteredSlides : content.hero;
 
   return (
     <>
-      <HeroSection slides={content.hero} />
-      <CategoryGrid />
-      <NewArrivalsSection copy={content.newArrivals} products={products} />
-      <SeasonalBanner />
+      <HeroSection slides={heroSlides} categories={visibleCategories} />
+      <NewArrivalsSection
+        copy={content.newArrivals}
+        products={products}
+        hiddenCategories={hiddenCategorySlugs}
+      />
       <BestSellersSection />
+      <SeasonalBanner />
+      <CategoryGrid />
       <BrandStorySection />
       <TrustSection />
     </>

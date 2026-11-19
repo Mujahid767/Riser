@@ -22,28 +22,41 @@ const TABS = [
 export default function NewArrivalsSection({
   copy,
   products: allProducts,
+  hiddenCategories = [],
 }: {
   copy: SiteContent["newArrivals"];
   products: StoreProduct[];
+  hiddenCategories?: string[];
 }) {
   const [activeTab, setActiveTab] = useState("all");
+  const hiddenSet = new Set(hiddenCategories);
+  const visibleTabs = TABS.filter(
+    (tab) =>
+      tab.category === "all" ||
+      (!hiddenSet.has(tab.category) && allProducts.some((p) => p.category === tab.category))
+  );
+
+  const highlighted = allProducts.filter((p) => p.isNew || p.isBestSeller);
+  const fallbackPool = highlighted.length >= 8
+    ? highlighted
+    : [...highlighted, ...allProducts.filter((p) => !p.isNew && !p.isBestSeller)];
 
   const filteredProducts =
     activeTab === "all"
-      ? allProducts.filter((p) => p.isNew || p.isBestSeller).slice(0, 8)
+      ? fallbackPool.slice(0, 8)
       : allProducts.filter((p) => p.category === activeTab).slice(0, 8);
 
   return (
-    <section className="py-20 sm:py-32 bg-[#09090d] border-b border-white/10 select-none">
+    <section className="py-8 sm:py-12 bg-[#09090d] border-b border-white/10 select-none">
       <div className="container-store">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 pb-6 border-b border-white/10 gap-4">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-5 pb-4 border-b border-white/10 gap-3">
           <div>
-            <p className="text-[10px] font-mono tracking-[0.35em] uppercase text-brand-500 font-bold mb-3 flex items-center gap-2">
+            <p className="text-[10px] font-mono tracking-[0.35em] uppercase text-brand-500 font-bold mb-2 flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-brand-500" />
               {copy.eyebrow}
             </p>
-            <h2 className="text-3xl sm:text-5xl font-black text-white uppercase tracking-[0.05em] font-sans">
+            <h2 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-[0.05em] font-sans">
               {copy.title}
             </h2>
           </div>
@@ -58,13 +71,13 @@ export default function NewArrivalsSection({
         </div>
 
         {/* Category Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-none">
-          {TABS.map((tab) => (
+        <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-5 scrollbar-none">
+          {visibleTabs.map((tab) => (
             <button
               key={tab.category}
               onClick={() => setActiveTab(tab.category)}
               className={cn(
-                "px-4 py-2 text-[10px] sm:text-xs font-mono tracking-[0.2em] uppercase font-bold transition-all whitespace-nowrap cursor-pointer border",
+                "px-3.5 py-2 text-[10px] sm:text-xs font-mono tracking-[0.18em] uppercase font-bold transition-all whitespace-nowrap cursor-pointer border",
                 activeTab === tab.category
                   ? "bg-white text-black border-white shadow-lg shadow-white/10"
                   : "bg-white/5 text-neutral-400 border-white/10 hover:border-white/30 hover:text-white"
