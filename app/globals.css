@@ -110,6 +110,7 @@ html {
   -moz-osx-font-smoothing: grayscale;
   background-color: #070709;
   color-scheme: dark;
+  overflow-x: clip;
 }
 
 body {
@@ -117,7 +118,7 @@ body {
   color: #f4f4f5;
   background-color: #070709;
   min-height: 100vh;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 img {

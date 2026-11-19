@@ -68,6 +68,13 @@ export default function ProductForm({ mode, initial }: Props) {
 
   // helpers
   const set = (patch: Partial<typeof data>) => setData((d) => ({ ...d, ...patch }));
+  const clearDeletedMedia = (deletedUrl: string) =>
+    setData((d) => ({
+      ...d,
+      imageUrl: d.imageUrl === deletedUrl ? "" : d.imageUrl,
+      secondaryImageUrl: d.secondaryImageUrl === deletedUrl ? "" : d.secondaryImageUrl,
+      images: d.images.filter((u) => u !== deletedUrl),
+    }));
 
   const sizeOptions = ["adult-one-piece", "adult-two-piece", "adult-three-piece", "short-tops", "nayra-dress-skirt"].includes(data.category)
     ? WOMEN_SIZES
@@ -198,9 +205,9 @@ export default function ProductForm({ mode, initial }: Props) {
 
       {error && <p className="text-red-400 text-sm">{error}</p>}
 
-      <div className="grid lg:grid-cols-[1fr_320px] gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
         {/* Left column */}
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           {/* Basic info */}
           <section className="bg-admin-card border border-admin-border p-5 space-y-5">
             <h2 className="text-white font-semibold text-sm uppercase tracking-wider">Basic info</h2>
@@ -241,24 +248,36 @@ export default function ProductForm({ mode, initial }: Props) {
           </section>
 
           {/* Photos */}
-          <section className="bg-admin-card border border-admin-border p-5 space-y-5">
+          <section className="bg-admin-card border border-admin-border p-4 sm:p-5 space-y-5">
             <h2 className="text-white font-semibold text-sm uppercase tracking-wider">Photos</h2>
-            <ImagePicker label="Main photo *" value={data.imageUrl} onChange={(url) => set({ imageUrl: url })} />
-            <ImagePicker label="Secondary / hover photo" value={data.secondaryImageUrl ?? ""} onChange={(url) => set({ secondaryImageUrl: url })} />
+            <ImagePicker
+              label="Main photo *"
+              value={data.imageUrl}
+              onChange={(url) => set({ imageUrl: url })}
+              onMediaDeleted={clearDeletedMedia}
+            />
+            <ImagePicker
+              label="Secondary / hover photo"
+              value={data.secondaryImageUrl ?? ""}
+              onChange={(url) => set({ secondaryImageUrl: url })}
+              onMediaDeleted={clearDeletedMedia}
+            />
 
             {/* Gallery extras */}
             <div>
               <span className="text-[10px] uppercase tracking-widest text-neutral-500 block mb-2">Gallery (extra photos)</span>
-              <div className="flex flex-wrap gap-2 mb-2">
+              <div className="flex flex-wrap gap-2.5 mb-3">
                 {data.images.map((img, i) => (
-                  <div key={i} className="relative w-20 h-20 border border-white/10 overflow-hidden group">
+                  <div key={`${img}-${i}`} className="relative w-20 h-20 border border-white/15 overflow-hidden bg-black">
                     <img src={img} alt="" className="w-full h-full object-cover" />
                     <button
                       type="button"
                       onClick={() => set({ images: data.images.filter((_, j) => j !== i) })}
-                      className="absolute top-0.5 right-0.5 bg-black/70 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label={`Remove gallery photo ${i + 1}`}
+                      title="Remove photo from gallery"
+                      className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-black/85 hover:bg-red-600 text-white border border-white/25 rounded-full transition-colors shadow"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}
@@ -269,13 +288,14 @@ export default function ProductForm({ mode, initial }: Props) {
                 onChange={(url) => {
                   if (url) setData((d) => ({ ...d, images: [...d.images, url] }));
                 }}
+                onMediaDeleted={clearDeletedMedia}
               />
             </div>
           </section>
 
           {/* Sizes & Per-Size Pricing */}
-          <section className="bg-admin-card border border-admin-border p-5 space-y-4">
-            <div className="flex items-center justify-between">
+          <section className="bg-admin-card border border-admin-border p-4 sm:p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-white font-semibold text-sm uppercase tracking-wider">
                 Sizes &amp; Per-Size Pricing
               </h2>
@@ -302,7 +322,7 @@ export default function ProductForm({ mode, initial }: Props) {
             </div>
 
             {/* Add custom size range */}
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-1">
               <input
                 value={customSize}
                 onChange={(e) => setCustomSize(e.target.value)}
@@ -313,12 +333,12 @@ export default function ProductForm({ mode, initial }: Props) {
                   }
                 }}
                 placeholder="Add custom size / range (e.g. 16-20, 22-26, 28-32, 34-38)"
-                className="flex-1 bg-black/40 border border-white/10 px-3 py-2 text-xs font-mono text-white outline-none focus:border-white/50 placeholder:text-neutral-600"
+                className="w-full sm:flex-1 min-w-0 bg-black/40 border border-white/10 px-3 py-2 text-xs font-mono text-white outline-none focus:border-white/50 placeholder:text-neutral-600"
               />
               <button
                 type="button"
                 onClick={addCustomSize}
-                className="px-3 py-2 text-xs font-mono uppercase tracking-wider border border-white/20 text-white hover:bg-white hover:text-black transition-colors"
+                className="shrink-0 px-3 py-2 text-xs font-mono uppercase tracking-wider border border-white/20 text-white hover:bg-white hover:text-black transition-colors"
               >
                 + Add Size
               </button>
@@ -332,46 +352,71 @@ export default function ProductForm({ mode, initial }: Props) {
                     Price (৳) &amp; Stock per Size — leave price blank for default ({data.price ? `৳${data.price}` : "not set"}); leave stock blank for shared inventory
                   </span>
                 </div>
-                <div className="grid sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {data.sizes.map((s) => (
                     <div
                       key={s}
-                      className="flex items-center gap-2 bg-black/30 border border-white/10 px-3 py-2"
+                      className="bg-black/30 border border-white/10 p-3 space-y-2.5 min-w-0"
                     >
-                      <span className="text-xs font-mono font-bold text-white min-w-[56px]">
-                        {s}
-                      </span>
-                      <div className="relative flex-1">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-neutral-500">
-                          ৳
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-mono font-bold text-white bg-white/10 px-2.5 py-0.5">
+                          SIZE {s}
                         </span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={data.sizePrices?.[s] ?? ""}
-                          onChange={(e) => setSizePrice(s, e.target.value)}
-                          placeholder={data.price ? `${data.price}` : "Price"}
-                          aria-label={`Price for size ${s}`}
-                          className="w-full bg-black/50 border border-white/10 pl-5 pr-1.5 py-1.5 text-xs font-mono text-white outline-none focus:border-white/50 placeholder:text-neutral-600"
-                        />
+                        <button
+                          type="button"
+                          onClick={() => toggleSize(s)}
+                          className="text-neutral-500 hover:text-red-400 p-1 shrink-0"
+                          title={`Remove size ${s}`}
+                          aria-label={`Remove size ${s}`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <input
-                        type="number"
-                        min={0}
-                        value={data.sizeStock?.[s] ?? ""}
-                        onChange={(e) => setSizeStock(s, e.target.value)}
-                        placeholder="Qty"
-                        aria-label={`Stock for size ${s}`}
-                        className="w-20 bg-black/50 border border-white/10 px-2 py-1.5 text-xs font-mono text-white outline-none focus:border-white/50 placeholder:text-neutral-600"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => toggleSize(s)}
-                        className="text-neutral-500 hover:text-red-400 p-1"
-                        title={`Remove size ${s}`}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="min-w-0">
+                          <label
+                            htmlFor={`size-price-${s}`}
+                            className="block text-[9px] uppercase tracking-widest text-neutral-500 mb-1"
+                          >
+                            Price (৳)
+                          </label>
+                          <div className="flex items-center bg-[#09090c] border border-white/15 focus-within:border-white/60">
+                            <span className="pl-2.5 pr-1 text-xs font-mono text-neutral-400 select-none shrink-0">
+                              ৳
+                            </span>
+                            <input
+                              id={`size-price-${s}`}
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              value={data.sizePrices?.[s] ?? ""}
+                              onChange={(e) => setSizePrice(s, e.target.value)}
+                              placeholder={data.price ? `${data.price}` : "Price"}
+                              aria-label={`Price for size ${s}`}
+                              className="w-full min-w-0 bg-transparent pr-2 py-2 text-sm font-mono text-white outline-none placeholder:text-neutral-600 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <label
+                            htmlFor={`size-qty-${s}`}
+                            className="block text-[9px] uppercase tracking-widest text-neutral-500 mb-1"
+                          >
+                            Stock Qty
+                          </label>
+                          <input
+                            id={`size-qty-${s}`}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            value={data.sizeStock?.[s] ?? ""}
+                            onChange={(e) => setSizeStock(s, e.target.value)}
+                            placeholder="Qty"
+                            aria-label={`Stock for size ${s}`}
+                            className="w-full min-w-0 bg-[#09090c] border border-white/15 px-2.5 py-2 text-sm font-mono text-white outline-none focus:border-white/60 placeholder:text-neutral-600 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -401,7 +446,7 @@ export default function ProductForm({ mode, initial }: Props) {
                     colors[i] = { ...col, value: e.target.value };
                     set({ colors });
                   }}
-                  className="w-10 h-10 border border-white/15 bg-transparent cursor-pointer"
+                  className="w-10 h-10 border border-white/15 bg-transparent cursor-pointer shrink-0"
                 />
                 <input
                   value={col.name}
@@ -411,12 +456,12 @@ export default function ProductForm({ mode, initial }: Props) {
                     set({ colors });
                   }}
                   placeholder="Color name"
-                  className="flex-1 bg-black/40 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-white/50"
+                  className="flex-1 min-w-0 bg-black/40 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-white/50"
                 />
                 <button
                   type="button"
                   onClick={() => set({ colors: data.colors.filter((_, j) => j !== i) })}
-                  className="text-neutral-500 hover:text-red-400"
+                  className="text-neutral-500 hover:text-red-400 shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -426,7 +471,7 @@ export default function ProductForm({ mode, initial }: Props) {
         </div>
 
         {/* Right column */}
-        <div className="space-y-5">
+        <div className="space-y-5 min-w-0">
           {/* Pricing */}
           <section className="bg-admin-card border border-admin-border p-5 space-y-5">
             <h2 className="text-white font-semibold text-sm uppercase tracking-wider">Pricing</h2>

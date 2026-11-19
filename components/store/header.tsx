@@ -12,7 +12,6 @@ import {
   Heart,
   ChevronDown,
   ArrowRight,
-  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCart } from "@/lib/cart/cart-store";
@@ -73,28 +72,25 @@ export default function Header({
 }: {
   announcement?: SiteContent["announcement"];
 } = {}) {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const { count: cartCount } = useCart();
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const [mobileMenuPath, setMobileMenuPath] = useState<string | null>(null);
+  const [searchOpenPath, setSearchOpenPath] = useState<string | null>(null);
+  const [dropdownState, setDropdownState] = useState<{ label: string; path: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const { count: cartCount } = useCart();
   const searchRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  const isMobileMenuOpen = mobileMenuPath === pathname;
+  const setIsMobileMenuOpen = (open: boolean) => setMobileMenuPath(open ? pathname : null);
 
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-    setActiveDropdown(null);
-    setIsSearchOpen(false);
-  }, [pathname]);
+  const isSearchOpen = searchOpenPath === pathname;
+  const setIsSearchOpen = (open: boolean) => setSearchOpenPath(open ? pathname : null);
+
+  const activeDropdown = dropdownState?.path === pathname ? dropdownState.label : null;
+  const setActiveDropdown = (label: string | null) =>
+    setDropdownState(label ? { label, path: pathname } : null);
 
   useEffect(() => {
     if (isSearchOpen) searchRef.current?.focus();
@@ -103,7 +99,7 @@ export default function Header({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setActiveDropdown(null);
+        setDropdownState(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -121,11 +117,11 @@ export default function Header({
   return (
     <>
       {/* Ticker Marquee Announcement */}
-      <div className="bg-[#050507] border-b border-white/10 text-neutral-300 text-[10px] sm:text-xs py-2 px-4 overflow-hidden select-none">
-        <div className="flex items-center justify-between container-store">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-            <span className="font-mono tracking-[0.2em] uppercase text-white font-semibold">
+      <div className="w-full bg-[#050507] border-b border-white/10 text-neutral-300 text-[10px] sm:text-xs py-2 overflow-hidden select-none">
+        <div className="flex items-center justify-between gap-2 container-store">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse shrink-0" />
+            <span className="font-mono tracking-[0.2em] uppercase text-white font-semibold truncate">
               {announcement?.badge || "DROP NOCTURNE // EDITION 2026"}
             </span>
           </div>
@@ -139,22 +135,15 @@ export default function Header({
               )
             )}
           </div>
-          <div className="flex items-center gap-4 text-[10px] font-mono tracking-widest text-neutral-400 uppercase">
+          <div className="flex items-center gap-4 text-[10px] font-mono tracking-widest text-neutral-400 uppercase shrink-0">
             <span className="text-white font-bold">BDT ৳</span>
             <span className="hidden sm:inline">{announcement?.rightNote || "DHAKA & NATIONWIDE DISPATCH"}</span>
           </div>
         </div>
       </div>
 
-      {/* Main Header */}
-      <header
-        className={cn(
-          "sticky top-0 z-50 transition-all duration-300 border-b",
-          isScrolled
-            ? "bg-[#070709]/95 backdrop-blur-xl border-white/15 shadow-2xl shadow-black/80"
-            : "bg-[#070709] border-white/10"
-        )}
-      >
+      {/* Main Header — flows above content cleanly so it never covers product photos on scroll */}
+      <header className="relative w-full z-50 border-b border-white/10 bg-[#070709]">
         <div className="container-store">
           <div className="flex items-center justify-between h-18 sm:h-20">
             {/* Left: Mobile Menu Toggle */}

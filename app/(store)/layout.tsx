@@ -38,7 +38,7 @@ export default async function StoreLayout({
       : undefined;
 
   return (
-    <div className="bg-[#070709] text-white min-h-screen flex flex-col justify-between relative">
+    <div className="bg-[#070709] text-white min-h-screen w-full overflow-x-clip flex flex-col justify-between relative">
       {/* Storefront-only browser analytics (never loaded on /admin/*) */}
       {safeGtmId && (
         <>
@@ -122,7 +122,7 @@ export default async function StoreLayout({
       </Suspense>
 
       <Header announcement={content.announcement} />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 w-full min-w-0">{children}</main>
       <Footer content={content} />
       <WhatsAppButton
         phoneNumber={content.contact?.whatsapp || "01577049566"}

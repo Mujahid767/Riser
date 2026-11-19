@@ -1,38 +1,41 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import type { MediaItem } from "@/lib/cms/types";
 import { uploadAdminImage } from "@/lib/uploads/client-upload";
-import { X, Upload, Check } from "lucide-react";
+import { X, Upload, Check, Trash2 } from "lucide-react";
 
 interface Props {
   value: string;
   onChange: (url: string) => void;
   label?: string;
+  onMediaDeleted?: (url: string) => void;
 }
 
-export default function ImagePicker({ value, onChange, label = "Photo" }: Props) {
+export default function ImagePicker({ value, onChange, label = "Photo", onMediaDeleted }: Props) {
   const [open, setOpen] = useState(false);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(value);
 
-  const fetchMedia = useCallback(async () => {
+  async function openLibrary() {
+    setSelected(value);
+    setError("");
+    setOpen(true);
     setLoading(true);
-    const res = await fetch("/api/admin/media");
-    const data = (await res.json().catch(() => ({}))) as { media?: MediaItem[] };
-    setMedia(data.media ?? []);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (open) {
-      setSelected(value);
-      void fetchMedia();
+    try {
+      const res = await fetch("/api/admin/media");
+      const data = (await res.json().catch(() => ({}))) as { media?: MediaItem[] };
+      setMedia(data.media ?? []);
+    } catch {
+      setError("Failed to load photo library.");
+    } finally {
+      setLoading(false);
     }
-  }, [open, value, fetchMedia]);
+  }
 
   async function upload(file: File): Promise<string | null> {
     setUploading(true);
@@ -50,9 +53,33 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
     }
   }
 
-  function confirm() {
+  function confirmSelection() {
     onChange(selected);
     setOpen(false);
+  }
+
+  async function deleteFromLibrary(item: MediaItem) {
+    if (!window.confirm("Delete this photo from the library and storage?")) return;
+    setDeletingId(item.id);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/media?id=${encodeURIComponent(item.id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "Could not delete that photo.");
+        return;
+      }
+      setMedia((m) => m.filter((entry) => entry.id !== item.id));
+      if (selected === item.url) setSelected("");
+      if (value === item.url) onChange("");
+      onMediaDeleted?.(item.url);
+    } catch {
+      setError("Network error while deleting photo.");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -61,8 +88,24 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
       <div className="space-y-2">
         <span className="text-[10px] uppercase tracking-widest text-neutral-500 block">{label}</span>
         <div className="flex gap-3 items-start">
-          <div className="w-28 h-28 bg-black border border-white/10 overflow-hidden shrink-0">
-            {value ? <img src={value} alt="" className="w-full h-full object-cover" /> : null}
+          <div className="relative w-24 h-24 sm:w-28 sm:h-28 bg-black border border-white/10 overflow-hidden shrink-0">
+            {value ? (
+              <>
+                <img src={value} alt="" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange("");
+                    setSelected("");
+                  }}
+                  aria-label={`Remove ${label}`}
+                  title={`Remove ${label}`}
+                  className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-black/85 text-white border border-white/25 hover:bg-red-600 transition-colors shadow"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : null}
           </div>
           <div className="flex-1 space-y-2 min-w-0">
             <input
@@ -98,11 +141,23 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
               </label>
               <button
                 type="button"
-                onClick={() => setOpen(true)}
+                onClick={() => void openLibrary()}
                 className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest border border-white/20 px-3 py-2 hover:border-white text-white"
               >
                 Choose from library
               </button>
+              {value && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange("");
+                    setSelected("");
+                  }}
+                  className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest border border-red-500/35 px-3 py-2 text-red-300 hover:bg-red-500/15 transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" /> Remove
+                </button>
+              )}
             </div>
             {error && !open && (
               <p role="alert" className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 px-2.5 py-1.5">
@@ -162,22 +217,41 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                   {media.map((item) => {
                     const isSelected = selected === item.url;
+                    const isDeleting = deletingId === item.id;
                     return (
-                      <button
+                      <div
                         key={item.id}
-                        type="button"
-                        onClick={() => setSelected(item.url)}
-                        className={`relative aspect-square overflow-hidden border-2 transition-all ${
-                          isSelected ? "border-white" : "border-transparent hover:border-white/30"
+                        className={`relative aspect-square overflow-hidden border-2 transition-all bg-black ${
+                          isSelected ? "border-white" : "border-white/10 hover:border-white/30"
                         }`}
                       >
-                        <img src={item.url} alt="" className="w-full h-full object-cover" />
-                        {isSelected && (
-                          <div className="absolute inset-0 bg-white/15 flex items-center justify-center">
-                            <Check className="w-6 h-6 text-white drop-shadow" />
-                          </div>
-                        )}
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelected(item.url)}
+                          aria-label={`Select ${item.filename}`}
+                          className="w-full h-full block"
+                        >
+                          <img src={item.url} alt="" className="w-full h-full object-cover" />
+                          {isSelected && (
+                            <div className="absolute inset-0 bg-white/15 flex items-center justify-center pointer-events-none">
+                              <Check className="w-6 h-6 text-white drop-shadow" />
+                            </div>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteFromLibrary(item);
+                          }}
+                          aria-label={`Delete ${item.filename} from library`}
+                          title="Delete photo from library"
+                          className="absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-full bg-black/85 text-neutral-200 border border-white/20 hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -199,7 +273,7 @@ export default function ImagePicker({ value, onChange, label = "Photo" }: Props)
                 </button>
                 <button
                   type="button"
-                  onClick={confirm}
+                  onClick={confirmSelection}
                   disabled={!selected}
                   className="px-6 py-2 text-xs uppercase tracking-widest bg-white text-black font-bold disabled:opacity-50"
                 >

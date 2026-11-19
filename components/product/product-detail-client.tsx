@@ -137,11 +137,11 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   };
 
   return (
-    <div className="bg-[#070709] min-h-screen text-white select-none">
+    <div className="bg-[#070709] min-h-screen w-full overflow-x-clip text-white select-none">
       {/* Breadcrumb Header */}
       <div className="border-b border-white/10 bg-[#050507]">
         <div className="container-store py-4">
-          <nav className="flex items-center gap-2 text-[10px] font-mono tracking-widest text-neutral-400 uppercase">
+          <nav className="flex flex-wrap items-center gap-2 text-[10px] font-mono tracking-widest text-neutral-400 uppercase">
             <Link href="/" className="hover:text-white transition-colors">
               ATELIER
             </Link>
@@ -166,7 +166,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
       <div className="container-store py-12 sm:py-16">
         <div className="grid lg:grid-cols-12 gap-12 lg:gap-16">
           {/* Left Column: Gallery */}
-          <div className="lg:col-span-7 space-y-4">
+          <div className="lg:col-span-7 min-w-0 space-y-4">
             {/* Main Stage Image */}
             <div className="relative aspect-[3/4] w-full bg-[#0d0d12] border border-white/15 overflow-hidden">
               {activeImage && !failedImages[activeImage] ? (
@@ -236,7 +236,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
 
             {/* Thumbnail Switcher */}
             {images.length > 1 && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3 overflow-x-auto pb-1 max-w-full scrollbar-none">
                 {images.map((img, idx) => (
                   <button
                     key={img}
@@ -248,7 +248,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                       setActiveImage(img);
                     }}
                     className={cn(
-                      "relative w-20 h-24 border overflow-hidden transition-all bg-[#0d0d12]",
+                      "relative w-20 h-24 shrink-0 border overflow-hidden transition-all bg-[#0d0d12]",
                       activeImage === img
                         ? "border-white shadow-lg shadow-white/10"
                         : "border-white/15 opacity-60 hover:opacity-100"
@@ -271,23 +271,23 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
           </div>
 
           {/* Right Column: Editorial Details */}
-          <div className="lg:col-span-5 flex flex-col justify-between">
+          <div className="lg:col-span-5 min-w-0 flex flex-col justify-between">
             <div>
               {/* Reference ID & Department */}
-              <div className="flex items-center justify-between pb-3 border-b border-white/10 text-[10px] font-mono text-neutral-400 uppercase tracking-widest">
-                <span>REF: {product.id}</span>
-                <span className="text-brand-400 font-bold">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10 text-[10px] font-mono text-neutral-400 uppercase tracking-widest">
+                <span className="truncate">REF: {product.id}</span>
+                <span className="text-brand-400 font-bold shrink-0">
                   {product.department === "petite" ? "PETITE ATELIER" : "MAISON FEMME"}
                 </span>
               </div>
 
               {/* Title */}
-              <h1 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-[0.04em] leading-tight font-sans mt-4 mb-4">
+              <h1 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-[0.04em] leading-tight font-sans mt-4 mb-4 break-words">
                 {product.name}
               </h1>
 
               {/* Price */}
-              <div className="flex items-baseline gap-3 mb-6">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-6">
                 <span className="text-2xl sm:text-3xl font-mono font-bold text-white tracking-tight">
                   {selectedSize || !hasMultiplePrices
                     ? formatPrice(activePrice)
@@ -298,7 +298,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                     {formatPrice(product.compareAtPrice)}
                   </span>
                 )}
-                <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest ml-2">
+                <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest">
                   {selectedSize ? `SIZE ${selectedSize}` : "INCLUSIVE OF ALL TAXES"}
                 </span>
               </div>
@@ -414,7 +414,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
 
               {/* Quantity & CTA Buttons */}
               <div className="space-y-3 mb-8">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3">
                   {/* Quantity selector */}
                   <div className="flex items-center border border-white/20 bg-black/40 h-12">
                     <button
@@ -443,7 +443,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                     type="button"
                     onClick={() => void handleAddToCart()}
                     disabled={soldOut}
-                    className="flex-1 btn-luxury-white h-12 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex-1 min-w-0 btn-luxury-white h-12 px-4 sm:px-8 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <ShoppingBag className="w-4 h-4" />
                     <span>{soldOut ? "SOLD OUT" : "ADD TO BAG"}</span>
