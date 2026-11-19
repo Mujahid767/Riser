@@ -235,6 +235,7 @@ export const defaultSiteContent: SiteContent = {
           "https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=900&q=80",
         edition: "EDITION // 07",
         featured: true,
+        hidden: true,
       },
       {
         id: "short-tops",
@@ -247,6 +248,7 @@ export const defaultSiteContent: SiteContent = {
           "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=900&q=80",
         edition: "EDITION // 08",
         featured: false,
+        hidden: true,
       },
     ],
   },

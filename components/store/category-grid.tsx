@@ -5,6 +5,9 @@ import { getSiteContent } from "@/lib/cms/store";
 
 export default async function CategoryGrid() {
   const { categories } = await getSiteContent();
+  const visibleCards = categories.cards.filter((cat) => !cat.hidden);
+
+  if (visibleCards.length === 0) return null;
 
   return (
     <section className="py-20 sm:py-32 bg-[#070709] border-b border-white/10 select-none">
@@ -32,7 +35,7 @@ export default async function CategoryGrid() {
 
         {/* Editorial Lookbook Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {categories.cards.map((cat) => {
+          {visibleCards.map((cat) => {
             const isLarge = cat.featured;
             return (
               <Link

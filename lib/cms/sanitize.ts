@@ -76,8 +76,13 @@ export function sanitizeContent(input: unknown): SiteContent {
     ? source.categories.cards
     : base.categories.cards;
   const cards: CategoryCard[] = cardsInput.slice(0, 16).map((card, index) => {
-    const fallback = base.categories.cards[index] ?? base.categories.cards[0];
     const raw = (card ?? {}) as Partial<CategoryCard>;
+    const fallback =
+      base.categories.cards.find(
+        (c) => (raw.id && c.id === raw.id) || (raw.slug && c.slug === raw.slug)
+      ) ??
+      base.categories.cards[index] ??
+      base.categories.cards[0];
     return {
       id: text(raw.id, fallback.id, 40),
       slug: slug(raw.slug, fallback.slug),
@@ -87,6 +92,7 @@ export function sanitizeContent(input: unknown): SiteContent {
       image: image(raw.image, fallback.image),
       edition: text(raw.edition, fallback.edition, 40),
       featured: Boolean(raw.featured),
+      hidden: typeof raw.hidden === "boolean" ? raw.hidden : Boolean(fallback.hidden),
     };
   });
 

@@ -21,6 +21,7 @@ export type CategoryCard = {
   image: string;
   edition: string;
   featured: boolean;
+  hidden?: boolean;
 };
 
 export type TrustItem = {

@@ -423,7 +423,18 @@ export default function ContentEditor({ initial }: { initial: SiteContent }) {
               />
               {content.categories.cards.map((card, index) => (
                 <div key={card.id} className="space-y-4 border border-white/10 p-4">
-                  <p className="text-white font-semibold">{card.label}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-white font-semibold">{card.label}</p>
+                    <label className="inline-flex items-center gap-2 text-xs text-neutral-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!card.hidden}
+                        onChange={(e) => updateCard(index, { hidden: !e.target.checked })}
+                        className="accent-white"
+                      />
+                      Show on homepage
+                    </label>
+                  </div>
                   <ImagePicker
                     label="Photo"
                     value={card.image}
