@@ -37,7 +37,7 @@ export default function NewArrivalsSection({
       (!hiddenSet.has(tab.category) && allProducts.some((p) => p.category === tab.category))
   );
 
-  const maxProducts = 12;
+  const maxProducts = 24;
   const highlighted = allProducts.filter((p) => p.isNew || p.isBestSeller);
   const fallbackPool = highlighted.length >= maxProducts
     ? highlighted
