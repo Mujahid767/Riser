@@ -11,7 +11,10 @@ import {
   hasPerSizeStock,
 } from "@/lib/products/types";
 import ImagePicker from "@/components/admin/image-picker";
-import { X, Plus } from "lucide-react";
+import ImageCropModal from "@/components/admin/image-crop-modal";
+import FramedRiserImage from "@/components/ui/framed-riser-image";
+import type { ImageFraming } from "@/lib/images/framing";
+import { X, Plus, Crop } from "lucide-react";
 
 type Mode = "new" | "edit";
 
@@ -31,6 +34,7 @@ const BLANK: Omit<AdminProduct, "id" | "createdAt" | "updatedAt"> = {
   imageUrl: "",
   secondaryImageUrl: "",
   images: [],
+  imageFraming: {},
   colors: [],
   sizes: [],
   sizePrices: {},
@@ -65,16 +69,27 @@ export default function ProductForm({ mode, initial }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [customSize, setCustomSize] = useState("");
+  const [editingGalleryImg, setEditingGalleryImg] = useState<{ url: string; index: number } | null>(null);
 
   // helpers
   const set = (patch: Partial<typeof data>) => setData((d) => ({ ...d, ...patch }));
-  const clearDeletedMedia = (deletedUrl: string) =>
+  const setPhotoFraming = (url: string, nextFraming: ImageFraming) =>
     setData((d) => ({
       ...d,
-      imageUrl: d.imageUrl === deletedUrl ? "" : d.imageUrl,
-      secondaryImageUrl: d.secondaryImageUrl === deletedUrl ? "" : d.secondaryImageUrl,
-      images: d.images.filter((u) => u !== deletedUrl),
+      imageFraming: { ...(d.imageFraming ?? {}), [url]: nextFraming },
     }));
+  const clearDeletedMedia = (deletedUrl: string) =>
+    setData((d) => {
+      const nextFraming = { ...(d.imageFraming ?? {}) };
+      delete nextFraming[deletedUrl];
+      return {
+        ...d,
+        imageUrl: d.imageUrl === deletedUrl ? "" : d.imageUrl,
+        secondaryImageUrl: d.secondaryImageUrl === deletedUrl ? "" : d.secondaryImageUrl,
+        images: d.images.filter((u) => u !== deletedUrl),
+        imageFraming: nextFraming,
+      };
+    });
 
   const sizeOptions = ["adult-one-piece", "adult-two-piece", "adult-three-piece", "short-tops", "nayra-dress-skirt"].includes(data.category)
     ? WOMEN_SIZES
@@ -254,12 +269,38 @@ export default function ProductForm({ mode, initial }: Props) {
               label="Main photo *"
               value={data.imageUrl}
               onChange={(url) => set({ imageUrl: url })}
+              framing={data.imageUrl ? data.imageFraming?.[data.imageUrl] : undefined}
+              onFramingChange={(f) => {
+                if (data.imageUrl) setPhotoFraming(data.imageUrl, f);
+              }}
+              onSelectWithFraming={(url, f) =>
+                setData((d) => ({
+                  ...d,
+                  imageUrl: url,
+                  imageFraming: { ...(d.imageFraming ?? {}), [url]: f },
+                }))
+              }
+              enableCropEditor
               onMediaDeleted={clearDeletedMedia}
             />
             <ImagePicker
               label="Secondary / hover photo"
               value={data.secondaryImageUrl ?? ""}
               onChange={(url) => set({ secondaryImageUrl: url })}
+              framing={
+                data.secondaryImageUrl ? data.imageFraming?.[data.secondaryImageUrl] : undefined
+              }
+              onFramingChange={(f) => {
+                if (data.secondaryImageUrl) setPhotoFraming(data.secondaryImageUrl, f);
+              }}
+              onSelectWithFraming={(url, f) =>
+                setData((d) => ({
+                  ...d,
+                  secondaryImageUrl: url,
+                  imageFraming: { ...(d.imageFraming ?? {}), [url]: f },
+                }))
+              }
+              enableCropEditor
               onMediaDeleted={clearDeletedMedia}
             />
 
@@ -268,16 +309,33 @@ export default function ProductForm({ mode, initial }: Props) {
               <span className="text-[10px] uppercase tracking-widest text-neutral-500 block mb-2">Gallery (extra photos)</span>
               <div className="flex flex-wrap gap-2.5 mb-3">
                 {data.images.map((img, i) => (
-                  <div key={`${img}-${i}`} className="relative w-20 h-20 border border-white/15 overflow-hidden bg-black">
-                    <img src={img} alt="" className="w-full h-full object-cover" />
+                  <div
+                    key={`${img}-${i}`}
+                    className="relative w-20 aspect-[3/4] border border-white/15 overflow-hidden bg-black"
+                  >
+                    <FramedRiserImage
+                      src={img}
+                      alt={`Gallery photo ${i + 1}`}
+                      framing={data.imageFraming?.[img]}
+                      sizes="80px"
+                    />
                     <button
                       type="button"
                       onClick={() => set({ images: data.images.filter((_, j) => j !== i) })}
                       aria-label={`Remove gallery photo ${i + 1}`}
                       title="Remove photo from gallery"
-                      className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-black/85 hover:bg-red-600 text-white border border-white/25 rounded-full transition-colors shadow"
+                      className="absolute top-1 right-1 z-10 w-6 h-6 flex items-center justify-center bg-black/85 hover:bg-red-600 text-white border border-white/25 rounded-full transition-colors shadow"
                     >
                       <X className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingGalleryImg({ url: img, index: i })}
+                      aria-label={`Edit framing for gallery photo ${i + 1}`}
+                      title="Adjust crop / positioning"
+                      className="absolute bottom-1 right-1 z-10 w-6 h-6 flex items-center justify-center bg-black/85 hover:bg-white hover:text-black text-white border border-white/25 rounded-full transition-colors shadow"
+                    >
+                      <Crop className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
@@ -288,8 +346,31 @@ export default function ProductForm({ mode, initial }: Props) {
                 onChange={(url) => {
                   if (url) setData((d) => ({ ...d, images: [...d.images, url] }));
                 }}
+                onSelectWithFraming={(url, f) => {
+                  if (!url) return;
+                  setData((d) => ({
+                    ...d,
+                    images: [...d.images, url],
+                    imageFraming: { ...(d.imageFraming ?? {}), [url]: f },
+                  }));
+                }}
+                enableCropEditor
                 onMediaDeleted={clearDeletedMedia}
               />
+              {editingGalleryImg && (
+                <ImageCropModal
+                  open
+                  imageSrc={editingGalleryImg.url}
+                  label={`Gallery photo ${editingGalleryImg.index + 1}`}
+                  confirmLabel="Apply Framing"
+                  initialFraming={data.imageFraming?.[editingGalleryImg.url] ?? null}
+                  onCancel={() => setEditingGalleryImg(null)}
+                  onConfirm={(nextFraming) => {
+                    setPhotoFraming(editingGalleryImg.url, nextFraming);
+                    setEditingGalleryImg(null);
+                  }}
+                />
+              )}
             </div>
           </section>
 

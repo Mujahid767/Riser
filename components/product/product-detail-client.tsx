@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import RiserImage from "@/components/ui/riser-image";
+import FramedRiserImage from "@/components/ui/framed-riser-image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,6 +17,11 @@ import {
   Scissors,
   Check,
   MessageCircle,
+  Maximize2,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Crop,
 } from "lucide-react";
 import { cn, formatPrice, calculateDiscount } from "@/lib/utils";
 import { addToCart } from "@/lib/cart/cart-store";
@@ -49,6 +55,8 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   const [mainLoaded, setMainLoaded] = useState(false);
   const [warmedSlides, setWarmedSlides] = useState<string[]>([]);
   const [failedImages, setFailedImages] = useState<Record<string, true>>({});
+  const [viewFullOriginal, setViewFullOriginal] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "ok"; text: string } | null>(null);
 
   // Fire ViewContent once per product page load
@@ -86,6 +94,18 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
   const images = [product.imageUrl, product.secondaryImageUrl, ...(product.gallery ?? [])].filter(
     (img, i, arr): img is string => Boolean(img) && arr.indexOf(img) === i
   );
+  const activeFraming = product.imageFraming?.[activeImage];
+  const activeImageIdx = Math.max(0, images.indexOf(activeImage));
+
+  // Close full-screen lightbox cleanly on Escape
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lightboxOpen]);
 
   // After the primary LCP photo finishes loading, warm remaining stage slides at exact
   // responsive srcset widths in background so thumbnail clicks switch instantaneously.
@@ -176,7 +196,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                     const isPrimary = img === images[0];
                     const isActive = img === activeImage;
                     return (
-                      <RiserImage
+                      <FramedRiserImage
                         key={img}
                         src={img}
                         alt={
@@ -184,13 +204,14 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                             ? product.name
                             : `${product.name} — view ${images.indexOf(img) + 1}`
                         }
-                        fill
+                        framing={product.imageFraming?.[img]}
+                        forceFit={viewFullOriginal}
                         preload={isPrimary}
                         loading="eager"
                         fetchPriority={isPrimary || isActive ? "high" : "low"}
                         sizes="(max-width: 1024px) 100vw, 55vw"
-                        className={cn(
-                          "object-cover object-center transition-opacity duration-200",
+                        outerClassName={cn(
+                          "transition-opacity duration-200",
                           isActive ? "opacity-100 z-10" : "opacity-0 z-0 pointer-events-none"
                         )}
                         onLoad={() => {
@@ -215,7 +236,7 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
               )}
 
               {/* Badges Overlay */}
-              <div className="absolute top-4 left-4 flex flex-col gap-1.5 pointer-events-none">
+              <div className="absolute top-4 left-4 z-20 flex flex-col gap-1.5 pointer-events-none">
                 {product.editionBadge && (
                   <span className="px-2.5 py-1 text-[9px] font-mono tracking-[0.25em] uppercase font-bold bg-black/80 backdrop-blur-md text-white border border-white/20">
                     {product.editionBadge}
@@ -232,6 +253,36 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                   </span>
                 )}
               </div>
+
+              {/* Full Original View & Full-Screen Lightbox Controls */}
+              {activeImage && !failedImages[activeImage] && (
+                <div className="absolute bottom-3 right-3 z-20 flex items-center gap-2">
+                  {activeFraming?.mode === "crop" && (
+                    <button
+                      type="button"
+                      onClick={() => setViewFullOriginal((v) => !v)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider bg-black/80 hover:bg-white hover:text-black text-white border border-white/25 backdrop-blur-md transition-colors"
+                    >
+                      {viewFullOriginal ? (
+                        <>
+                          <Crop className="w-3 h-3" /> Card Framing
+                        </>
+                      ) : (
+                        "View Full Photo"
+                      )}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setLightboxOpen(true)}
+                    aria-label="Open full original image"
+                    title="View full original photograph"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider bg-black/80 hover:bg-white hover:text-black text-white border border-white/25 backdrop-blur-md transition-colors"
+                  >
+                    <Maximize2 className="w-3 h-3" /> Full View
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Thumbnail Switcher */}
@@ -248,21 +299,99 @@ export default function ProductDetailClient({ product, related }: ProductDetailC
                       setActiveImage(img);
                     }}
                     className={cn(
-                      "relative w-20 h-24 shrink-0 border overflow-hidden transition-all bg-[#0d0d12]",
+                      "relative w-20 aspect-[3/4] shrink-0 border overflow-hidden transition-all bg-[#0d0d12]",
                       activeImage === img
                         ? "border-white shadow-lg shadow-white/10"
                         : "border-white/15 opacity-60 hover:opacity-100"
                     )}
                   >
-                    <RiserImage
+                    <FramedRiserImage
                       src={img}
                       alt={`${product.name} view ${idx + 1}`}
-                      fill
+                      framing={product.imageFraming?.[img]}
                       sizes="80px"
-                      className="object-cover"
                     />
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Full-Screen Original Photo Lightbox */}
+            {lightboxOpen && activeImage && (
+              <div
+                className="fixed inset-0 z-[180] bg-black/95 flex flex-col justify-between p-4 sm:p-6 select-none"
+                role="dialog"
+                aria-modal="true"
+                aria-label={`${product.name} full original image viewer`}
+              >
+                <div className="flex items-center justify-between gap-4 z-10">
+                  <span className="text-[11px] font-mono uppercase tracking-widest text-neutral-300 truncate">
+                    {product.name} ({activeImageIdx + 1} / {images.length}) — Original Uncropped Photo
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxOpen(false)}
+                    aria-label="Close full image view"
+                    className="w-9 h-9 border border-white/25 bg-black/70 text-white hover:bg-white hover:text-black flex items-center justify-center transition-colors shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="relative flex-1 min-h-0 my-3">
+                  <RiserImage
+                    src={activeImage}
+                    alt={`${product.name} original view`}
+                    fill
+                    sizes="100vw"
+                    className="object-contain object-center"
+                  />
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Previous product photo"
+                        onClick={() =>
+                          setActiveImage(
+                            images[(activeImageIdx - 1 + images.length) % images.length]
+                          )
+                        }
+                        className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/75 border border-white/25 text-white hover:bg-white hover:text-black flex items-center justify-center transition-colors"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Next product photo"
+                        onClick={() =>
+                          setActiveImage(images[(activeImageIdx + 1) % images.length])
+                        }
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-black/75 border border-white/25 text-white hover:bg-white hover:text-black flex items-center justify-center transition-colors"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {images.length > 1 && (
+                  <div className="flex items-center justify-center gap-2 overflow-x-auto pb-1">
+                    {images.map((img, idx) => (
+                      <button
+                        key={`lb-${img}`}
+                        type="button"
+                        onClick={() => setActiveImage(img)}
+                        aria-label={`View original photo ${idx + 1}`}
+                        className={cn(
+                          "relative w-14 aspect-[3/4] border overflow-hidden shrink-0 bg-[#0d0d12]",
+                          activeImage === img ? "border-white" : "border-white/20 opacity-60 hover:opacity-100"
+                        )}
+                      >
+                        <RiserImage src={img} alt="" fill sizes="64px" className="object-contain" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

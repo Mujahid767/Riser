@@ -11,6 +11,7 @@ import {
   type AdminProduct,
   type ProductColor,
 } from "./types";
+import { normalizeImageFramingMap } from "@/lib/images/framing";
 import { Decimal } from "@prisma/client/runtime/library";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ function toAdminProduct(row: {
   imageUrl: string;
   secondaryImageUrl: string | null;
   galleryImages: unknown;
+  imageFraming?: unknown;
   colors: unknown;
   sizes: unknown;
   sizePrices?: unknown;
@@ -79,6 +81,7 @@ function toAdminProduct(row: {
     imageUrl: row.imageUrl,
     secondaryImageUrl: row.secondaryImageUrl ?? undefined,
     images: gallery,
+    imageFraming: normalizeImageFramingMap(row.imageFraming),
     colors,
     sizes,
     sizePrices,
@@ -181,6 +184,11 @@ export async function createProduct(
       imageUrl: input.imageUrl ?? "",
       secondaryImageUrl: input.secondaryImageUrl ?? null,
       galleryImages: (input.images ?? []) as never,
+      imageFraming: normalizeImageFramingMap(input.imageFraming, [
+        input.imageUrl,
+        input.secondaryImageUrl,
+        ...(input.images ?? []),
+      ]) as never,
       colors: (input.colors ?? []) as never,
       sizes: (input.sizes ?? []) as never,
       sizePrices: (input.sizePrices ?? {}) as never,
@@ -222,6 +230,27 @@ export async function updateProduct(
       ? resolveSizeStockAndTotal(nextSizes, rawSizeStock, input.stock ?? existing.stock)
       : null;
 
+  const nextImageUrl = input.imageUrl !== undefined ? input.imageUrl : existing.imageUrl;
+  const nextSecondaryUrl =
+    input.secondaryImageUrl !== undefined ? input.secondaryImageUrl : existing.secondaryImageUrl;
+  const nextGallery =
+    input.images !== undefined
+      ? input.images
+      : Array.isArray(existing.galleryImages)
+      ? (existing.galleryImages as string[])
+      : [];
+  const shouldUpdateFraming =
+    input.imageFraming !== undefined ||
+    input.imageUrl !== undefined ||
+    input.secondaryImageUrl !== undefined ||
+    input.images !== undefined;
+  const nextFraming = shouldUpdateFraming
+    ? normalizeImageFramingMap(
+        input.imageFraming !== undefined ? input.imageFraming : existing.imageFraming,
+        [nextImageUrl, nextSecondaryUrl, ...(nextGallery ?? [])]
+      )
+    : undefined;
+
   const row = await prisma.product.update({
     where: { id },
     data: {
@@ -248,6 +277,7 @@ export async function updateProduct(
       ...(input.images !== undefined
         ? { galleryImages: (input.images ?? []) as never }
         : {}),
+      ...(nextFraming !== undefined ? { imageFraming: nextFraming as never } : {}),
       ...(input.colors !== undefined
         ? { colors: (input.colors ?? []) as never }
         : {}),

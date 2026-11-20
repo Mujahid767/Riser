@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { normalizeImageFramingMap } from "@/lib/images/framing";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
       basePrice: true,
       compareAtPrice: true,
       imageUrl: true,
+      imageFraming: true,
       sizes: true,
       stock: true,
     },
@@ -38,6 +40,7 @@ export async function GET(request: Request) {
     price: Number(p.basePrice.toString()),
     compareAtPrice: p.compareAtPrice ? Number(p.compareAtPrice.toString()) : null,
     imageUrl: p.imageUrl,
+    imageFraming: normalizeImageFramingMap(p.imageFraming),
     sizes: Array.isArray(p.sizes) ? (p.sizes as string[]) : [],
     stock: p.stock,
   }));

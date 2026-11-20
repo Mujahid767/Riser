@@ -5,6 +5,7 @@ import prisma from "@/lib/db";
 import { defaultSiteContent } from "./defaults";
 import { sanitizeContent } from "./sanitize";
 import type { CmsStore, MediaItem, SiteContent } from "./types";
+import { normalizeSingleFraming, type ImageFraming } from "@/lib/images/framing";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const STORE_FILE = path.join(DATA_DIR, "cms.json");
@@ -65,23 +66,40 @@ export const getSiteContent = cache(async (): Promise<SiteContent> => {
   return store.content;
 });
 
+function toMediaItem(r: {
+  id: string;
+  url: string;
+  filename: string;
+  width: number;
+  height: number;
+  bytes: number;
+  createdAt: Date;
+  storage: string;
+  publicId: string | null;
+  framing?: unknown;
+}): MediaItem {
+  const framing = normalizeSingleFraming(r.framing) ?? undefined;
+  return {
+    id: r.id,
+    url: r.url,
+    filename: r.filename,
+    width: r.width,
+    height: r.height,
+    bytes: r.bytes,
+    createdAt: r.createdAt.toISOString(),
+    storage: (r.storage === "cloudinary" ? "cloudinary" : "local") as MediaItem["storage"],
+    publicId: r.publicId ?? undefined,
+    ...(framing ? { framing } : {}),
+  };
+}
+
 export async function listMedia(): Promise<MediaItem[]> {
   try {
     const rows = await prisma.mediaItem.findMany({
       orderBy: { createdAt: "desc" },
     });
     if (rows.length > 0) {
-      return rows.map((r) => ({
-        id: r.id,
-        url: r.url,
-        filename: r.filename,
-        width: r.width,
-        height: r.height,
-        bytes: r.bytes,
-        createdAt: r.createdAt.toISOString(),
-        storage: (r.storage === "cloudinary" ? "cloudinary" : "local") as MediaItem["storage"],
-        publicId: r.publicId ?? undefined,
-      }));
+      return rows.map(toMediaItem);
     }
   } catch (e) {
     console.error("[cms] failed to list media from database", e);
@@ -118,17 +136,7 @@ export async function saveSiteContent(input: unknown): Promise<SiteContent> {
 export async function getMediaById(id: string): Promise<MediaItem | null> {
   const row = await prisma.mediaItem.findUnique({ where: { id } }).catch(() => null);
   if (row) {
-    return {
-      id: row.id,
-      url: row.url,
-      filename: row.filename,
-      width: row.width,
-      height: row.height,
-      bytes: row.bytes,
-      createdAt: row.createdAt.toISOString(),
-      storage: (row.storage === "cloudinary" ? "cloudinary" : "local") as MediaItem["storage"],
-      publicId: row.publicId ?? undefined,
-    };
+    return toMediaItem(row);
   }
   const store = await readStore();
   return store.media.find((entry) => entry.id === id) ?? null;
@@ -136,6 +144,7 @@ export async function getMediaById(id: string): Promise<MediaItem | null> {
 
 export async function addMedia(item: MediaItem): Promise<MediaItem> {
   return withLock(async () => {
+    const normalizedFraming = item.framing ? normalizeSingleFraming(item.framing) : null;
     await prisma.mediaItem.upsert({
       where: { id: item.id },
       create: {
@@ -147,6 +156,7 @@ export async function addMedia(item: MediaItem): Promise<MediaItem> {
         bytes: item.bytes ?? 0,
         storage: item.storage ?? "local",
         publicId: item.publicId ?? null,
+        framing: (normalizedFraming ?? null) as never,
         createdAt: item.createdAt ? new Date(item.createdAt) : new Date(),
       },
       update: {
@@ -157,6 +167,7 @@ export async function addMedia(item: MediaItem): Promise<MediaItem> {
         bytes: item.bytes ?? 0,
         storage: item.storage ?? "local",
         publicId: item.publicId ?? null,
+        ...(normalizedFraming ? { framing: normalizedFraming as never } : {}),
       },
     });
 
@@ -181,17 +192,7 @@ export async function removeMedia(id: string): Promise<MediaItem | null> {
       const existing = await prisma.mediaItem.findUnique({ where: { id } });
       if (existing) {
         await prisma.mediaItem.delete({ where: { id } });
-        removed = {
-          id: existing.id,
-          url: existing.url,
-          filename: existing.filename,
-          width: existing.width,
-          height: existing.height,
-          bytes: existing.bytes,
-          createdAt: existing.createdAt.toISOString(),
-          storage: (existing.storage === "cloudinary" ? "cloudinary" : "local") as MediaItem["storage"],
-          publicId: existing.publicId ?? undefined,
-        };
+        removed = toMediaItem(existing);
       }
     } catch (e) {
       console.error("[cms] failed to delete media from database", e);
@@ -208,5 +209,43 @@ export async function removeMedia(id: string): Promise<MediaItem | null> {
     }
 
     return removed;
+  });
+}
+
+export async function updateMediaFraming(
+  id: string,
+  framing: ImageFraming
+): Promise<MediaItem | null> {
+  const normalized = normalizeSingleFraming(framing);
+  if (!normalized) return null;
+
+  return withLock(async () => {
+    let updated: MediaItem | null = null;
+    try {
+      const existing = await prisma.mediaItem.findUnique({ where: { id } });
+      if (existing) {
+        const row = await prisma.mediaItem.update({
+          where: { id },
+          data: { framing: normalized as never },
+        });
+        updated = toMediaItem(row);
+      }
+    } catch (e) {
+      console.error("[cms] failed to update media framing in database", e);
+    }
+
+    try {
+      const store = await readStore();
+      const idx = store.media.findIndex((entry) => entry.id === id);
+      if (idx >= 0) {
+        store.media[idx] = { ...store.media[idx], framing: normalized };
+        if (!updated) updated = store.media[idx];
+        await writeStore(store);
+      }
+    } catch {
+      // Ephemeral/read-only disk fallback
+    }
+
+    return updated;
   });
 }

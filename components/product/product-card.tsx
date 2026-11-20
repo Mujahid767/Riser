@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import RiserImage from "@/components/ui/riser-image";
+import FramedRiserImage from "@/components/ui/framed-riser-image";
 import { Heart, ShoppingBag, Eye, ArrowUpRight } from "lucide-react";
 import { cn, formatPrice, calculateDiscount } from "@/lib/utils";
 import { useWishlist } from "@/lib/wishlist/wishlist-store";
 import { getPriceForSize } from "@/lib/products/types";
+import type { ProductImageFramingMap } from "@/lib/images/framing";
 
 interface ProductCardProps {
   id: string;
@@ -16,6 +17,7 @@ interface ProductCardProps {
   compareAtPrice?: number | null;
   imageUrl: string;
   secondaryImageUrl?: string | null;
+  imageFraming?: ProductImageFramingMap;
   isNew?: boolean;
   isBestSeller?: boolean;
   isLimited?: boolean;
@@ -39,6 +41,7 @@ export default function ProductCard({
   compareAtPrice,
   imageUrl,
   secondaryImageUrl,
+  imageFraming,
   isNew,
   isBestSeller,
   isLimited,
@@ -92,25 +95,26 @@ export default function ProductCard({
         <div className="relative aspect-[3/4] w-full overflow-hidden bg-neutral-950">
           {imageUrl && !imageError ? (
             <>
-              <RiserImage
+              <FramedRiserImage
                 src={imageUrl}
                 alt={name}
-                fill
+                framing={imageFraming?.[imageUrl]}
                 loading={priority ? "eager" : "lazy"}
                 fetchPriority={priority ? "high" : "auto"}
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                className="object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
+                hoverScale
                 onError={() => setImageError(true)}
               />
               {secondaryImageUrl && hoverTriggered && (
-                <RiserImage
+                <FramedRiserImage
                   src={secondaryImageUrl}
                   alt={`${name} — alternate angle`}
-                  fill
+                  framing={imageFraming?.[secondaryImageUrl]}
                   loading="eager"
                   sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                  className={cn(
-                    "object-cover object-center absolute inset-0 transition-opacity duration-500 ease-out",
+                  hoverScale
+                  outerClassName={cn(
+                    "transition-opacity duration-500 ease-out z-10",
                     secondaryLoaded ? "opacity-0 group-hover:opacity-100" : "opacity-0"
                   )}
                   onLoad={() => setSecondaryLoaded(true)}
@@ -129,11 +133,18 @@ export default function ProductCard({
             </div>
           )}
 
-          {/* Vignette Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
+          {/* Vignette Gradient Overlay (softer when Fit Entire Dress is used) */}
+          <div
+            className={cn(
+              "absolute inset-0 pointer-events-none z-10",
+              imageFraming?.[imageUrl]?.mode === "fit"
+                ? "bg-gradient-to-t from-black/50 via-transparent to-transparent"
+                : "bg-gradient-to-t from-black/80 via-transparent to-black/20"
+            )}
+          />
 
           {/* Top Badges */}
-          <div className="absolute top-3 left-3 right-3 flex items-start justify-between pointer-events-none">
+          <div className="absolute top-3 left-3 right-3 z-20 flex items-start justify-between pointer-events-none">
             <div className="flex flex-col gap-1 items-start">
               {editionBadge ? (
                 <span className="px-2 py-0.5 text-[9px] font-mono tracking-[0.2em] uppercase font-bold bg-black/70 backdrop-blur-md text-white border border-white/20">

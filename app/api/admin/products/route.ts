@@ -64,6 +64,7 @@ export async function POST(request: Request) {
     imageUrl: body.imageUrl ?? "",
     secondaryImageUrl: body.secondaryImageUrl ?? "",
     images: body.images ?? [],
+    imageFraming: body.imageFraming,
     colors: body.colors ?? [],
     sizes: body.sizes ?? [],
     sizePrices: body.sizePrices ?? {},

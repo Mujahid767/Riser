@@ -1,3 +1,5 @@
+import type { ProductImageFramingMap } from "@/lib/images/framing";
+
 // High-Fashion Luxury Atelier Products for Riser
 // Inspired by D'YAVOL X haute couture dark luxury aesthetics
 
@@ -11,6 +13,8 @@ export interface SeedProduct {
   secondaryImageUrl?: string;
   /** Extra gallery photos (admin products) */
   gallery?: string[];
+  /** Optional non-destructive crop/fit framing metadata keyed by image URL */
+  imageFraming?: ProductImageFramingMap;
   /** Units available. `undefined` = not tracked (demo products). */
   stock?: number;
   isNew?: boolean;

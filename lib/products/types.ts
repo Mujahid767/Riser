@@ -1,3 +1,5 @@
+import type { ProductImageFramingMap } from "@/lib/images/framing";
+
 export type ProductStatus = "active" | "draft" | "archived";
 
 export type ProductColor = {
@@ -26,6 +28,7 @@ export type AdminProduct = {
   imageUrl: string;
   secondaryImageUrl?: string;
   images: string[]; // gallery
+  imageFraming?: ProductImageFramingMap;
   colors: ProductColor[];
   sizes: string[];
   sizePrices?: Record<string, number>;

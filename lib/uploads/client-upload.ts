@@ -1,4 +1,5 @@
 import type { MediaItem } from "@/lib/cms/types";
+import type { ImageFraming } from "@/lib/images/framing";
 
 const MAX_DIMENSION = 2400;
 const OPTIMIZE_THRESHOLD_BYTES = 900 * 1024; // Optimize any image > 900 KB for fast crisp DSLR uploads
@@ -78,7 +79,10 @@ type SignatureResponse =
       eagerAsync?: string;
     };
 
-async function tryDirectCloudinaryUpload(file: File): Promise<MediaItem | null> {
+async function tryDirectCloudinaryUpload(
+  file: File,
+  framing?: ImageFraming
+): Promise<MediaItem | null> {
   const sigRes = await fetch("/api/admin/media/signature", { method: "POST" });
   if (sigRes.status === 401) {
     throw new Error("Your admin session expired. Please sign in again.");
@@ -129,6 +133,7 @@ async function tryDirectCloudinaryUpload(file: File): Promise<MediaItem | null> 
       height: cloudData.height ?? 0,
       bytes: cloudData.bytes ?? file.size,
       publicId: cloudData.public_id ?? sig.publicId,
+      ...(framing ? { framing } : {}),
     }),
   });
   const regData = (await regRes.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
@@ -145,18 +150,22 @@ async function tryDirectCloudinaryUpload(file: File): Promise<MediaItem | null> 
       createdAt: new Date().toISOString(),
       storage: "cloudinary",
       publicId: cloudData.public_id ?? sig.publicId,
+      ...(framing ? { framing } : {}),
     };
   }
   return regData.media;
 }
 
-export async function uploadAdminImage(rawFile: File): Promise<MediaItem> {
+export async function uploadAdminImage(
+  rawFile: File,
+  framing?: ImageFraming
+): Promise<MediaItem> {
   const file = await optimizeDslrImage(rawFile);
 
   // 1. Try direct browser -> Cloudinary upload first (bypasses server body limits)
   let directError: string | null = null;
   try {
-    const direct = await tryDirectCloudinaryUpload(file);
+    const direct = await tryDirectCloudinaryUpload(file, framing);
     if (direct) return direct;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Direct upload failed";
@@ -168,6 +177,9 @@ export async function uploadAdminImage(rawFile: File): Promise<MediaItem> {
   // 2. Fallback: upload through server route (supports up to 20MB, handles Cloudinary via server SDK)
   const body = new FormData();
   body.append("file", file);
+  if (framing) {
+    body.append("framing", JSON.stringify(framing));
+  }
   const res = await fetch("/api/admin/media", { method: "POST", body });
   const data = (await res.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
   if (!res.ok || !data.media) {

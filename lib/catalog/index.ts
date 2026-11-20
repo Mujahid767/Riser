@@ -1,6 +1,7 @@
 import { cache } from "react";
 import prisma from "@/lib/db";
 import { normalizeSizeStock, type AdminProduct, type ProductColor } from "@/lib/products/types";
+import { normalizeImageFramingMap } from "@/lib/images/framing";
 import { SEED_PRODUCTS, type SeedProduct } from "@/lib/utils/seed-products";
 import { Decimal } from "@prisma/client/runtime/library";
 
@@ -31,6 +32,7 @@ function fromDb(row: {
   imageUrl: string;
   secondaryImageUrl: string | null;
   galleryImages: unknown;
+  imageFraming?: unknown;
   colors: unknown;
   sizes: unknown;
   sizePrices?: unknown;
@@ -58,6 +60,7 @@ function fromDb(row: {
   const gallery = Array.isArray(row.galleryImages)
     ? (row.galleryImages as string[])
     : [];
+  const imageFraming = normalizeImageFramingMap(row.imageFraming);
 
   return {
     id: row.id,
@@ -68,6 +71,7 @@ function fromDb(row: {
     imageUrl: row.imageUrl,
     secondaryImageUrl: row.secondaryImageUrl ?? undefined,
     gallery,
+    imageFraming,
     stock: Math.max(0, row.stock),
     isNew: row.isNew,
     isBestSeller: row.isBestSeller,

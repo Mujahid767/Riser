@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import RiserImage from "@/components/ui/riser-image";
+import FramedRiserImage from "@/components/ui/framed-riser-image";
+import type { ProductImageFramingMap } from "@/lib/images/framing";
 import { Heart, ShoppingBag, Trash2 } from "lucide-react";
 import { useWishlist } from "@/lib/wishlist/wishlist-store";
 import { formatPrice } from "@/lib/utils";
@@ -15,32 +16,39 @@ type WishlistProduct = {
   price: number;
   compareAtPrice?: number | null;
   imageUrl: string;
+  imageFraming?: ProductImageFramingMap;
   sizes: string[];
   stock?: number;
 };
 
 export default function WishlistClient() {
   const { ids, toggle } = useWishlist();
+  const [loadedKey, setLoadedKey] = useState("");
   const [products, setProducts] = useState<WishlistProduct[]>([]);
-  const [loading, setLoading] = useState(true);
   const [addedIds, setAddedIds] = useState<string[]>([]);
+  const idsKey = ids.join(",");
+  const loading = ids.length > 0 && loadedKey !== idsKey;
 
   useEffect(() => {
-    if (ids.length === 0) {
-      setProducts([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
+    if (!idsKey) return;
+    let active = true;
     // Fetch product details for wishlisted IDs from the shop API
-    fetch(`/api/products/batch?ids=${ids.join(",")}`)
+    fetch(`/api/products/batch?ids=${idsKey}`)
       .then((r) => r.json())
       .then((data) => {
+        if (!active) return;
         setProducts(Array.isArray(data.products) ? data.products : []);
+        setLoadedKey(idsKey);
       })
-      .catch(() => setProducts([]))
-      .finally(() => setLoading(false));
-  }, [ids]);
+      .catch(() => {
+        if (!active) return;
+        setProducts([]);
+        setLoadedKey(idsKey);
+      });
+    return () => {
+      active = false;
+    };
+  }, [idsKey]);
 
   function handleAddToCart(product: WishlistProduct) {
     addToCart({
@@ -92,12 +100,12 @@ export default function WishlistClient() {
               <article key={product.id} className="group relative bg-white border border-neutral-100 hover:border-neutral-200 transition-all">
                 <Link href={`/product/${product.slug}`} className="block relative">
                   <div className="relative aspect-[3/4] overflow-hidden bg-neutral-50">
-                    <RiserImage
+                    <FramedRiserImage
                       src={product.imageUrl}
                       alt={product.name}
-                      fill
+                      framing={product.imageFraming?.[product.imageUrl]}
                       sizes="(max-width: 640px) 50vw, 25vw"
-                      className="object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                      hoverScale
                     />
                   </div>
                 </Link>

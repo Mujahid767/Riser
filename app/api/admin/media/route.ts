@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getAdminSession } from "@/lib/auth/session";
-import { addMedia, getMediaById, getSiteContent, listMedia, removeMedia } from "@/lib/cms/store";
+import {
+  addMedia,
+  getMediaById,
+  getSiteContent,
+  listMedia,
+  removeMedia,
+  updateMediaFraming,
+} from "@/lib/cms/store";
 import { deleteUploadedFile, saveUploadedImage, UploadError } from "@/lib/uploads/save-image";
+import { normalizeSingleFraming } from "@/lib/images/framing";
 import type { MediaItem } from "@/lib/cms/types";
 
 export const runtime = "nodejs";
@@ -25,6 +33,7 @@ export async function POST(request: Request) {
     if (!body?.id || !body?.url || !body.url.startsWith("https://res.cloudinary.com/")) {
       return NextResponse.json({ error: "Invalid Cloudinary media payload." }, { status: 400 });
     }
+    const framing = normalizeSingleFraming(body.framing) ?? undefined;
     const item: MediaItem = {
       id: String(body.id),
       url: String(body.url),
@@ -35,6 +44,7 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
       storage: "cloudinary",
       publicId: body.publicId ? String(body.publicId) : undefined,
+      ...(framing ? { framing } : {}),
     };
     await addMedia(item);
     return NextResponse.json({ media: item });
@@ -46,15 +56,43 @@ export async function POST(request: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Choose a photo to upload." }, { status: 400 });
   }
+  const rawFraming = form?.get("framing");
+  let parsedFraming: ReturnType<typeof normalizeSingleFraming> = null;
+  if (typeof rawFraming === "string" && rawFraming.trim()) {
+    try {
+      parsedFraming = normalizeSingleFraming(JSON.parse(rawFraming));
+    } catch {
+      parsedFraming = null;
+    }
+  }
 
   try {
     const item = await saveUploadedImage(file);
+    if (parsedFraming) item.framing = parsedFraming;
     await addMedia(item);
     return NextResponse.json({ media: item });
   } catch (error) {
     const message = error instanceof UploadError ? error.message : "Could not process that photo.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+export async function PATCH(request: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Missing photo id." }, { status: 400 });
+
+  const body = (await request.json().catch(() => null)) as { framing?: unknown } | null;
+  const framing = normalizeSingleFraming(body?.framing);
+  if (!framing) return NextResponse.json({ error: "Invalid crop framing payload." }, { status: 400 });
+
+  const updated = await updateMediaFraming(id, framing);
+  if (!updated) return NextResponse.json({ error: "Photo not found." }, { status: 404 });
+
+  return NextResponse.json({ media: updated });
 }
 
 export async function DELETE(request: Request) {

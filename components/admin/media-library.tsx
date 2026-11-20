@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { MediaItem } from "@/lib/cms/types";
+import type { ImageFraming } from "@/lib/images/framing";
 import { uploadAdminImage } from "@/lib/uploads/client-upload";
-import { Upload, Cloud, HardDrive, AlertTriangle, Check, Trash2 } from "lucide-react";
+import ImageCropModal from "@/components/admin/image-crop-modal";
+import FramedRiserImage from "@/components/ui/framed-riser-image";
+import { Upload, Cloud, HardDrive, AlertTriangle, Check, Trash2, Crop } from "lucide-react";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -11,28 +14,68 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+type PendingLibraryCrop =
+  | { kind: "upload"; file: File; previewUrl: string }
+  | { kind: "existing"; item: MediaItem };
+
 export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
   const [media, setMedia] = useState(initial);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState("");
   const [storage, setStorage] = useState<"cloudinary" | "local" | null>(null);
+  const [pendingCrop, setPendingCrop] = useState<PendingLibraryCrop | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+
+  function revokePreview() {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }
 
   useEffect(() => {
     fetch("/api/admin/storage-info")
       .then((r) => r.json())
       .then((d: { storage?: "cloudinary" | "local" }) => setStorage(d.storage ?? "local"))
       .catch(() => setStorage("local"));
+    return () => revokePreview();
   }, []);
 
-  async function upload(file: File) {
+  function startUploadWithPreview(file: File) {
+    revokePreview();
+    const previewUrl = URL.createObjectURL(file);
+    previewUrlRef.current = previewUrl;
+    setError("");
+    setPendingCrop({ kind: "upload", file, previewUrl });
+  }
+
+  async function handleConfirmCrop(framing: ImageFraming) {
+    if (!pendingCrop) return;
     setBusy(true);
     setError("");
     try {
-      const item = await uploadAdminImage(file);
-      setMedia((m) => [item, ...m]);
+      if (pendingCrop.kind === "upload") {
+        const item = await uploadAdminImage(pendingCrop.file, framing);
+        setMedia((m) => [item, ...m]);
+        revokePreview();
+        setPendingCrop(null);
+      } else {
+        const res = await fetch(`/api/admin/media?id=${encodeURIComponent(pendingCrop.item.id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ framing }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string; media?: MediaItem };
+        if (!res.ok || !data.media) {
+          setError(data.error ?? "Could not update framing.");
+          return;
+        }
+        setMedia((m) => m.map((entry) => (entry.id === data.media!.id ? data.media! : entry)));
+        setPendingCrop(null);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
+      setError(err instanceof Error ? err.message : "Action failed.");
     } finally {
       setBusy(false);
     }
@@ -65,8 +108,7 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
         <div>
           <h1 className="text-2xl font-bold text-white">Photos</h1>
           <p className="text-neutral-500 text-sm mt-1 max-w-xl">
-            Upload product and banner photos. They are automatically optimised to WebP and served at
-            the fastest speed possible.
+            Upload product and banner photos with live crop &amp; fit preview. Originals stay intact in storage.
           </p>
         </div>
         <label className="inline-flex items-center justify-center gap-2 bg-white text-black px-5 py-3 text-xs font-bold tracking-[0.18em] uppercase cursor-pointer hover:bg-neutral-100 transition-colors">
@@ -84,7 +126,7 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
             disabled={busy}
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) void upload(file);
+              if (file) startUploadWithPreview(file);
               e.target.value = "";
             }}
           />
@@ -98,7 +140,7 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
           <div className="min-w-0">
             <p className="text-sm text-emerald-300 font-semibold">Cloudinary CDN active</p>
             <p className="text-xs text-emerald-400/70 mt-0.5">
-              Photos are stored on Cloudinary's global CDN. Customers get images served from the
+              Photos are stored on Cloudinary&apos;s global CDN. Customers get images served from the
               nearest server worldwide — ultra-fast loading.
             </p>
           </div>
@@ -109,7 +151,7 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
           <div className="min-w-0">
             <p className="text-sm text-amber-300 font-semibold">Using local server storage</p>
             <p className="text-xs text-amber-400/70 mt-0.5">
-              Photos are saved to this server's disk. This works fine for a VPS. To get CDN speed,
+              Photos are saved to this server&apos;s disk. This works fine for a VPS. To get CDN speed,
               add your Cloudinary keys to <code className="font-mono bg-black/30 px-1">.env.local</code> and restart the server.
             </p>
             <p className="text-xs text-amber-400/70 mt-1">
@@ -120,7 +162,7 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
         </div>
       ) : null}
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && !pendingCrop && <p className="text-sm text-red-400">{error}</p>}
 
       {/* Grid */}
       {media.length === 0 ? (
@@ -133,16 +175,18 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
           {media.map((item) => (
             <article key={item.id} className="bg-admin-card border border-admin-border group relative overflow-hidden">
               {/* Image */}
-              <div className="aspect-[3/4] overflow-hidden bg-black">
-                <img
+              <div className="relative aspect-[3/4] overflow-hidden bg-black">
+                <FramedRiserImage
                   src={item.url}
                   alt=""
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  framing={item.framing}
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                  hoverScale
                 />
               </div>
 
               {/* Storage badge */}
-              <div className="absolute top-2 left-2">
+              <div className="absolute top-2 left-2 flex flex-col gap-1 items-start z-10">
                 {item.storage === "cloudinary" ? (
                   <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/80 text-white px-1.5 py-0.5 backdrop-blur-sm">
                     <Cloud className="w-2.5 h-2.5" /> CDN
@@ -150,6 +194,11 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
                 ) : (
                   <span className="inline-flex items-center gap-1 text-[10px] bg-black/60 text-white px-1.5 py-0.5 backdrop-blur-sm">
                     <HardDrive className="w-2.5 h-2.5" /> Local
+                  </span>
+                )}
+                {item.framing && (
+                  <span className="text-[9px] font-mono uppercase bg-black/80 text-neutral-200 border border-white/15 px-1.5 py-0.5">
+                    {item.framing.mode === "fit" ? "Fit Dress" : `${item.framing.aspectRatio}`}
                   </span>
                 )}
               </div>
@@ -162,7 +211,7 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
                     {item.width}×{item.height} · {formatBytes(item.bytes)}
                   </span>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => void copy(item.url)}
@@ -179,7 +228,19 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
                   </button>
                   <button
                     type="button"
+                    onClick={() => {
+                      setError("");
+                      setPendingCrop({ kind: "existing", item });
+                    }}
+                    className="text-xs text-neutral-300 hover:text-white transition-colors flex items-center gap-1"
+                    title="Edit default crop framing"
+                  >
+                    <Crop className="w-3 h-3" /> Crop
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void remove(item.id)}
+                    aria-label={`Delete ${item.filename}`}
                     className="text-xs text-neutral-500 hover:text-red-400 transition-colors flex items-center gap-1 ml-auto"
                   >
                     <Trash2 className="w-3 h-3" />
@@ -196,6 +257,31 @@ export default function MediaLibrary({ initial }: { initial: MediaItem[] }) {
           {media.length} photo{media.length !== 1 ? "s" : ""} ·{" "}
           {storage === "cloudinary" ? "Served from Cloudinary CDN" : "Served from local disk"}
         </p>
+      )}
+
+      {pendingCrop && (
+        <ImageCropModal
+          open
+          imageSrc={
+            pendingCrop.kind === "upload" ? pendingCrop.previewUrl : pendingCrop.item.url
+          }
+          label={
+            pendingCrop.kind === "upload"
+              ? pendingCrop.file.name
+              : pendingCrop.item.filename
+          }
+          confirmLabel={pendingCrop.kind === "upload" ? "Save & Upload" : "Save Framing"}
+          initialFraming={
+            pendingCrop.kind === "existing" ? pendingCrop.item.framing ?? null : null
+          }
+          busy={busy}
+          error={error}
+          onCancel={() => {
+            revokePreview();
+            setPendingCrop(null);
+          }}
+          onConfirm={handleConfirmCrop}
+        />
       )}
     </div>
   );

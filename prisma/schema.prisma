@@ -80,6 +80,8 @@ model Product {
   secondaryImageUrl String?
   // Additional gallery images as JSON array of URLs
   galleryImages    Json          @default("[]")
+  // Non-destructive crop/fit framing metadata keyed by image URL
+  imageFraming     Json          @default("{}")
 
   // Variants stored as JSON arrays for simple admin CRUD
   // Each color: { name: string, value: string }
@@ -284,6 +286,7 @@ model MediaItem {
   bytes     Int      @default(0)
   storage   String   @default("local")
   publicId  String?
+  framing   Json?
   createdAt DateTime @default(now())
 
   @@index([createdAt])

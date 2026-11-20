@@ -1,3 +1,5 @@
+import type { ImageFraming } from "@/lib/images/framing";
+
 export type HeroSlide = {
   id: string;
   image: string;
@@ -145,6 +147,8 @@ export type MediaItem = {
   storage?: "cloudinary" | "local";
   /** Cloudinary public_id — only present when storage === "cloudinary" */
   publicId?: string;
+  /** Optional default non-destructive crop/fit framing metadata */
+  framing?: ImageFraming;
 };
 
 export type CmsStore = {
